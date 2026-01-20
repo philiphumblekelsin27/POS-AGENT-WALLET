@@ -50,7 +50,8 @@ export const AgentMap: React.FC<AgentMapProps> = ({ agents, onSelectAgent }) => 
 
   const loadGoogleMapsScript = () => {
       // Avoid duplicate script injection
-      if (window.google && window.google.maps) {
+      // Fix: Cast window to any to access google
+      if ((window as any).google && (window as any).google.maps) {
           setMapLoaded(true);
           return;
       }
@@ -67,20 +68,23 @@ export const AgentMap: React.FC<AgentMapProps> = ({ agents, onSelectAgent }) => 
   };
 
   useEffect(() => {
-    if (useRealMap && mapLoaded && window.google && mapRef.current) {
+    // Fix: Cast window to any to access google
+    if (useRealMap && mapLoaded && (window as any).google && mapRef.current) {
         initGoogleMap();
     }
   }, [useRealMap, mapLoaded, agents, userLocation]);
 
   const initGoogleMap = () => {
-      if (!mapRef.current || !window.google) return;
+      // Fix: Cast window to any to access google
+      if (!mapRef.current || !(window as any).google) return;
 
       const defaultCenter = { lat: 6.5244, lng: 3.3792 }; // Default to Lagos
       const center = userLocation || defaultCenter;
 
       // Initialize Map Instance if not exists
       if (!mapInstanceRef.current) {
-          mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+          // Fix: Cast window to any to access google.maps.Map
+          mapInstanceRef.current = new (window as any).google.maps.Map(mapRef.current, {
               center: center,
               zoom: 13,
               disableDefaultUI: false,
@@ -102,12 +106,14 @@ export const AgentMap: React.FC<AgentMapProps> = ({ agents, onSelectAgent }) => 
 
       // 1. Add User Marker (Blue Dot)
       if (userLocation) {
-          const userMarker = new window.google.maps.Marker({
+          // Fix: Cast window to any to access google.maps.Marker
+          const userMarker = new (window as any).google.maps.Marker({
               position: userLocation,
               map: map,
               title: "You are here",
               icon: {
-                  path: window.google.maps.SymbolPath.CIRCLE,
+                  // Fix: Cast window to any to access google.maps.SymbolPath
+                  path: (window as any).google.maps.SymbolPath.CIRCLE,
                   scale: 8,
                   fillColor: "#4285F4",
                   fillOpacity: 1,
@@ -122,7 +128,8 @@ export const AgentMap: React.FC<AgentMapProps> = ({ agents, onSelectAgent }) => 
       // 2. Add Agent Markers
       agents.forEach(agent => {
           if (agent.location) {
-              const marker = new window.google.maps.Marker({
+              // Fix: Cast window to any to access google.maps.Marker
+              const marker = new (window as any).google.maps.Marker({
                   position: agent.location,
                   map: map,
                   title: agent.businessName,
@@ -132,7 +139,8 @@ export const AgentMap: React.FC<AgentMapProps> = ({ agents, onSelectAgent }) => 
               });
 
               // InfoWindow for Agent
-              const infoWindow = new window.google.maps.InfoWindow({
+              // Fix: Cast window to any to access google.maps.InfoWindow
+              const infoWindow = new (window as any).google.maps.InfoWindow({
                   content: `
                     <div style="padding: 5px; color: black;">
                         <strong>${agent.businessName}</strong><br/>

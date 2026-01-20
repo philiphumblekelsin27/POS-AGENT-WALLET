@@ -1,737 +1,384 @@
 
-
-import { User, UserRole, Transaction, TransactionType, TransactionStatus, Agent, KycLimits, Loan, LoanStatus, LoanTier, ServiceRequest, ServiceRequestStatus, Ad, UserStatus, KycData, SystemSettings, ChatSession, ChatMessage, AuditLog, AgentCategory, VerificationStatus } from '../types';
-import { generateAccountNumber } from '../utils/accountGenerator';
+import { 
+  User, UserRole, UserStatus, VerificationStatus, Transaction, 
+  Agent, AgentCategory, TransactionStatus, TransactionType,
+  MarketData, SupportTicket, SystemLog, RealTimeEvent, ChatSession
+} from '../types';
 import { SecureStorage } from '../utils/storage';
+import { generateAccountNumber } from '../utils/accountGenerator';
 
-// Constants
-const CURRENT_USER_ID = 'user_123';
-
-const KYC_TIERS: Record<number, { daily: number; weekly: number }> = {
-  1: { daily: 50000, weekly: 200000 },
-  2: { daily: 200000, weekly: 1000000 },
-  3: { daily: 5000000, weekly: 20000000 },
-};
-
-const generateAgentNumber = (category: AgentCategory): string => {
-    const prefixMap: Record<string, string> = {
-        [AgentCategory.POS]: 'POS',
-        [AgentCategory.DRIVER]: 'DRI',
-        [AgentCategory.HOTEL]: 'HTL',
-        [AgentCategory.DELIVERY]: 'DEL',
-        [AgentCategory.HAIRDRESSER]: 'STY',
-        [AgentCategory.MERCHANT]: 'MER',
-        [AgentCategory.HEALTH]: 'MED',
-        [AgentCategory.EDUCATION]: 'EDU'
-    };
-    const prefix = prefixMap[category] || 'GEN';
-    const random = Math.floor(10000 + Math.random() * 90000);
-    return `AN-${prefix}-${random}`;
-};
-
-// Initial Data (Fallback)
 const DEFAULT_USERS: Record<string, User> = {
-  [CURRENT_USER_ID]: {
-    id: CURRENT_USER_ID,
+  'user_123': {
+    id: 'user_123',
     username: 'johndoe',
     name: 'John Doe',
+    displayName: 'Johnny D',
+    bio: 'Tech enthusiast and frequent traveler.',
     email: 'john@example.com',
     password: 'password',
-    accountNumber: '8123-45-6789', 
+    pin: '123456',
+    walletNumber: '112233', 
+    accountNumber: generateAccountNumber('08000000000'),
     role: UserRole.USER,
     status: UserStatus.ACTIVE,
-    balance: 15400.00,
+    balance: 55400.00,
+    preferredCurrency: 'NGN',
+    wallets: [{ id: 'w1', currency: 'NGN', balance: 55400.00, isDefault: true }],
     kycLevel: 2,
-    avatarUrl: 'https://ui-avatars.com/api/?name=John+Doe&background=random',
-    location: { lat: 6.5244, lng: 3.3792 },
-    limits: { dailyLimit: 200000, weeklyLimit: 1000000, dailyUsed: 0, weeklyUsed: 0 },
-    verificationStatus: VerificationStatus.VERIFIED,
-    createdAt: new Date().toISOString()
-  },
-  'admin_1': {
-    id: 'admin_1',
-    username: 'admin',
-    name: 'System Admin',
-    email: 'admin@poswallet.com',
-    password: 'password',
-    accountNumber: '9000-00-0001',
-    role: UserRole.ADMIN,
-    status: UserStatus.ACTIVE,
-    balance: 0,
-    kycLevel: 3,
-    limits: { dailyLimit: 999999999, weeklyLimit: 999999999, dailyUsed: 0, weeklyUsed: 0 },
-    verificationStatus: VerificationStatus.VERIFIED,
-    createdAt: new Date().toISOString()
-  },
-  'support_1': {
-    id: 'support_1',
-    username: 'support',
-    name: 'Customer Service',
-    email: 'help@poswallet.com',
-    password: 'password',
-    accountNumber: '9111-11-1111',
-    role: UserRole.SUPPORT,
-    status: UserStatus.ACTIVE,
-    balance: 0,
-    kycLevel: 3,
-    limits: { dailyLimit: 0, weeklyLimit: 0, dailyUsed: 0, weeklyUsed: 0 },
-    verificationStatus: VerificationStatus.VERIFIED,
-    createdAt: new Date().toISOString()
-  },
-  'agent_1': {
-    id: 'agent_1',
-    username: 'sarahpos',
-    name: 'Sarah POS',
-    email: 'sarah@agent.com',
-    password: 'password',
-    accountNumber: '8155-27-0034',
-    role: UserRole.AGENT,
-    status: UserStatus.ACTIVE,
-    balance: 50000,
-    kycLevel: 2,
-    avatarUrl: 'https://ui-avatars.com/api/?name=Sarah+POS&background=random',
-    limits: { dailyLimit: 200000, weeklyLimit: 1000000, dailyUsed: 0, weeklyUsed: 0 },
-    
-    // Agent Fields
-    agentNumber: 'AN-POS-1001',
-    businessName: "Sarah's Quick Cash",
-    category: AgentCategory.POS,
-    subcategories: ['Withdrawal', 'Deposit'],
-    description: "Reliable POS service in Ikeja.",
-    rating: 4.8,
-    ratingCount: 120,
-    isOnline: true,
-    services: ['Cash Withdrawal', 'Transfer', 'Bill Payment'],
-    location: { lat: 6.5250, lng: 3.3795 },
-    totalCommission: 12500,
-    completedJobs: 45,
-    workingHours: "8AM - 8PM",
+    avatarUrl: 'https://ui-avatars.com/api/?name=John+Doe&background=1E293B&color=fff',
     verificationStatus: VerificationStatus.VERIFIED,
     createdAt: new Date().toISOString(),
-    posDetails: {
-        shopAddress: "12 Market Street, Ikeja",
-        cashCapacity: 500000
-    }
-  } as Agent
+    referralCode: 'PAYNA-123',
+    totalSpent: 124500,
+    totalEarned: 0,
+    rating: 5.0,
+    reviewCount: 0,
+    privacyMode: false,
+    limits: { dailyLimit: 500000 }
+  },
+  'super_admin': {
+    id: 'super_admin',
+    username: 'godmode',
+    name: 'Thomas Kwofie',
+    email: 'admin@payna.io',
+    password: 'password',
+    walletNumber: '000000',
+    accountNumber: generateAccountNumber('00000000000'),
+    role: UserRole.SUPER_ADMIN,
+    status: UserStatus.ACTIVE,
+    balance: 10000000,
+    preferredCurrency: 'NGN',
+    wallets: [{ id: 'w_master', currency: 'NGN', balance: 10000000, isDefault: true }],
+    kycLevel: 3,
+    verificationStatus: VerificationStatus.VERIFIED,
+    createdAt: new Date().toISOString(),
+    avatarUrl: 'https://ui-avatars.com/api/?name=Thomas+Kwofie&background=10B981&color=fff',
+    referralCode: 'ADMIN-001',
+    totalSpent: 0,
+    totalEarned: 0,
+    rating: 5.0,
+    reviewCount: 100
+  }
 };
 
-const DEFAULT_SETTINGS: SystemSettings = {
-    bankAccounts: [
-        { id: 'ba_1', bankName: 'GTBank', accountNumber: '0123456789', accountName: 'POS Wallet Inc' },
-        { id: 'ba_2', bankName: 'Zenith Bank', accountNumber: '2233445566', accountName: 'POS Wallet Ops' }
-    ],
-    supportEmail: 'help@poswallet.com',
-    supportPhone: '+234 800 000 0000'
-};
+const DEFAULT_AGENTS: Agent[] = [
+  {
+    id: 'agent_1',
+    userId: 'u_agent_1',
+    businessName: 'Lagos Fast-Cash POS',
+    category: AgentCategory.POS,
+    avatarUrl: 'https://ui-avatars.com/api/?name=POS+Lagos&background=10B981&color=fff',
+    rating: 4.8,
+    ratingCount: 156,
+    isOnline: true,
+    basePrice: 100,
+    verificationStatus: VerificationStatus.VERIFIED,
+    location: { lat: 6.5244, lng: 3.3792 },
+    phone: '+2348012345678',
+    description: 'Instant cash withdrawals and deposits. Open 24/7.',
+    operatingHours: '9:00 AM - 9:00 PM',
+    travelRadius: 5
+  }
+];
 
 class MockStore {
   private users: Record<string, User>;
+  private agents: Agent[];
   private transactions: Transaction[];
   private currentUser: User | null = null;
-  private systemSettings: SystemSettings;
-  private ads: Ad[];
-  private loans: Loan[];
-  private serviceRequests: ServiceRequest[];
-  private chatSessions: Record<string, ChatSession>; // userId -> Session
-  private auditLogs: AuditLog[];
+  private logs: SystemLog[] = [];
+  private listeners: Set<(event: RealTimeEvent) => void> = new Set();
+  private supportTickets: SupportTicket[];
 
   constructor() {
-    // Load from Secure Storage or fallback to defaults
     this.users = SecureStorage.getItem('users', DEFAULT_USERS);
+    this.agents = SecureStorage.getItem('agents', DEFAULT_AGENTS);
     this.transactions = SecureStorage.getItem('transactions', []);
-    this.systemSettings = SecureStorage.getItem('settings', DEFAULT_SETTINGS);
-    this.ads = SecureStorage.getItem('ads', [
-        { id: '1', text: 'Get 50% off transfer fees today!', color: 'bg-blue-600', active: true },
-        { id: '2', text: 'Apply for a Quick Loan - Instant Approval!', color: 'bg-purple-600', active: true },
-        { id: '3', text: 'Become a verified agent and earn commissions.', color: 'bg-green-600', active: true }
+    this.logs = SecureStorage.getItem('system_logs', [
+      { id: 'l1', event: 'Vault Kernel Initialized', user: 'SYSTEM', timestamp: new Date().toISOString() }
     ]);
-    this.loans = SecureStorage.getItem('loans', []);
-    this.serviceRequests = SecureStorage.getItem('serviceRequests', []);
-    this.chatSessions = SecureStorage.getItem('chatSessions', {});
-    this.auditLogs = SecureStorage.getItem('auditLogs', []);
+    this.supportTickets = SecureStorage.getItem('support_tickets', []);
+  }
+
+  subscribe(callback: (event: RealTimeEvent) => void) {
+    this.listeners.add(callback);
+    return () => this.listeners.delete(callback);
+  }
+
+  private emit(type: string, payload: any) {
+    const event: RealTimeEvent = { type, payload, timestamp: new Date().toISOString() };
+    this.listeners.forEach(cb => cb(event));
   }
 
   private save() {
-      SecureStorage.setItem('users', this.users);
-      SecureStorage.setItem('transactions', this.transactions);
-      SecureStorage.setItem('settings', this.systemSettings);
-      SecureStorage.setItem('ads', this.ads);
-      SecureStorage.setItem('loans', this.loans);
-      SecureStorage.setItem('serviceRequests', this.serviceRequests);
-      SecureStorage.setItem('chatSessions', this.chatSessions);
-      SecureStorage.setItem('auditLogs', this.auditLogs);
+    SecureStorage.setItem('users', this.users);
+    SecureStorage.setItem('agents', this.agents);
+    SecureStorage.setItem('transactions', this.transactions);
+    SecureStorage.setItem('system_logs', this.logs);
+    SecureStorage.setItem('support_tickets', this.supportTickets);
   }
 
-  private logAdminAction(action: string, targetId: string, details: string) {
-      if (!this.currentUser || this.currentUser.role !== UserRole.ADMIN) return;
-      const log: AuditLog = {
-          id: `log_${Date.now()}`,
-          adminId: this.currentUser.id,
-          action,
-          targetId,
-          details,
-          timestamp: new Date().toISOString()
-      };
-      this.auditLogs.unshift(log);
+  private addLog(event: string, user: string) {
+    this.logs.unshift({ id: `l_${Date.now()}`, event, user, timestamp: new Date().toISOString() });
+    this.save();
+  }
+
+  // --- Profile Updates ---
+  updateUser(userId: string, updates: Partial<User>) {
+    if (this.users[userId]) {
+      this.users[userId] = { ...this.users[userId], ...updates };
+      if (this.currentUser?.id === userId) {
+        this.currentUser = this.users[userId];
+      }
+      this.addLog(`Profile Updated: ${Object.keys(updates).join(', ')}`, this.users[userId].name);
       this.save();
+      this.emit('USER_UPDATE', this.users[userId]);
+      return { success: true, user: this.users[userId] };
+    }
+    return { success: false, message: 'User not found' };
   }
 
-  getAuditLogs() {
-      return this.auditLogs;
+  updateAgent(agentId: string, updates: Partial<Agent>) {
+    const idx = this.agents.findIndex(a => a.id === agentId);
+    if (idx !== -1) {
+      this.agents[idx] = { ...this.agents[idx], ...updates };
+      this.addLog(`Agent Profile Updated: ${this.agents[idx].businessName}`, 'SYSTEM');
+      this.save();
+      this.emit('AGENT_UPDATE', this.agents[idx]);
+      return { success: true, agent: this.agents[idx] };
+    }
+    return { success: false, message: 'Agent not found' };
   }
 
-  // --- Auth ---
-  login(role: UserRole = UserRole.USER): User {
-    const user = Object.values(this.users).find(u => u.role === role && u.status !== UserStatus.DELETED);
+  // --- Financial Integrity (God Mode) ---
+  calculateSystemLiquidity() {
+    const rates: Record<string, number> = { NGN: 1, USD: 1550, EUR: 1680, BTC: 105000000 };
+    let totalLiquidityNGN = 0;
+    const breakdown: Record<string, { totalHoldings: number, valueInNGN: number }> = {};
+
+    Object.values(this.users).forEach(user => {
+      user.wallets.forEach(wallet => {
+        if (!breakdown[wallet.currency]) breakdown[wallet.currency] = { totalHoldings: 0, valueInNGN: 0 };
+        breakdown[wallet.currency].totalHoldings += wallet.balance;
+        const valNGN = wallet.balance * (rates[wallet.currency] || 1);
+        breakdown[wallet.currency].valueInNGN += valNGN;
+        totalLiquidityNGN += valNGN;
+      });
+    });
+
+    return { totalLiquidityNGN, breakdown, lastUpdated: new Date().toISOString() };
+  }
+
+  calculateTotalNetWorth(userId: string): number {
+    const user = this.users[userId];
+    if (!user) return 0;
+    return user.wallets.reduce((acc, w) => acc + w.balance, 0);
+  }
+
+  // --- Auth & Node Identity ---
+  async autoLogin(): Promise<User | null> {
+    const session = SecureStorage.getItem('auth_session', null);
+    if (session && this.users[session.userId]) {
+      this.currentUser = this.users[session.userId];
+      return this.currentUser;
+    }
+    return null;
+  }
+
+  login(email: string, pass: string) {
+    const user = Object.values(this.users).find(u => u.email === email && u.password === pass);
     if (user) {
       this.currentUser = user;
-      return user;
+      SecureStorage.setItem('auth_session', { userId: user.id });
+      this.addLog('Secure Entry Successful', user.name);
+      return { success: true, user };
     }
-    throw new Error('User not found');
+    return { success: false, message: 'Invalid Credentials' };
   }
 
-  loginWithCredentials(email: string, password: string): { success: boolean; message?: string; user?: User } {
-    const user = Object.values(this.users).find(u => u.email === email && u.password === password);
+  loginWithPin(email: string, pin: string) {
+    const user = Object.values(this.users).find(u => u.email === email && u.pin === pin);
     if (user) {
-        if (user.status === UserStatus.SUSPENDED) return { success: false, message: 'Account Suspended' };
-        if (user.status === UserStatus.REJECTED) return { success: false, message: 'Account Rejected' };
-        if (user.status === UserStatus.DELETED) return { success: false, message: 'Account Deleted' };
-        this.currentUser = user;
-        return { success: true, user };
+      this.currentUser = user;
+      SecureStorage.setItem('auth_session', { userId: user.id });
+      this.addLog('PIN-based Entry', user.name);
+      return { success: true, user };
     }
-    return { success: false, message: 'Invalid credentials' };
+    return { success: false, message: 'Invalid PIN' };
   }
 
-  loginWithFace(email: string): { success: boolean; message?: string; user?: User } {
-      const user = Object.values(this.users).find(u => u.email === email);
-      if (user) {
-          if (user.status === UserStatus.SUSPENDED) return { success: false, message: 'Account Suspended' };
-          if (user.status === UserStatus.DELETED) return { success: false, message: 'Account Deleted' };
-          if (Math.random() > 0.1) {
-              this.currentUser = user;
-              return { success: true, user };
-          }
-          return { success: false, message: 'Face not recognized. Try again.' };
-      }
-      return { success: false, message: 'User not found' };
+  register(data: any) {
+    const newUser: User = {
+      id: `u_${Date.now()}`,
+      ...data,
+      accountNumber: generateAccountNumber(),
+      balance: 0,
+      wallets: [{ id: `w_${Date.now()}`, currency: 'NGN', balance: 0, isDefault: true }],
+      kycLevel: 1,
+      status: UserStatus.ACTIVE,
+      verificationStatus: VerificationStatus.UNVERIFIED,
+      createdAt: new Date().toISOString(),
+      referralCode: `PAYNA-${Math.floor(1000 + Math.random() * 9000)}`,
+      totalSpent: 0,
+      totalEarned: 0,
+      rating: 5.0,
+      reviewCount: 0
+    };
+    this.users[newUser.id] = newUser;
+    this.addLog('New Node Registered', newUser.name);
+    this.save();
+    return newUser;
   }
 
   logout() {
+    if (this.currentUser) this.addLog('Node Desynchronized', this.currentUser.name);
     this.currentUser = null;
+    SecureStorage.setItem('auth_session', null);
   }
 
-  register(data: any): { success: boolean; message?: string } {
-      const existing = Object.values(this.users).find(u => u.email === data.email || u.username === data.username);
-      if (existing) return { success: false, message: 'Email or Username already taken' };
+  // --- Escrow & Transaction Engine ---
+  initiateEscrow(senderId: string, receiverId: string, amount: number, currency: string, service: AgentCategory) {
+    const sender = this.users[senderId];
+    if (!sender || sender.balance < amount) throw new Error("Insufficient Funds");
 
-      const newUser: User = {
-          id: `user_${Date.now()}`,
-          ...data,
-          balance: 0,
-          kycLevel: 1,
-          accountNumber: generateAccountNumber(data.phone),
-          status: UserStatus.PENDING_SETUP,
-          verificationStatus: VerificationStatus.UNVERIFIED,
-          limits: { dailyLimit: 50000, weeklyLimit: 200000, dailyUsed: 0, weeklyUsed: 0 },
-          avatarUrl: `https://ui-avatars.com/api/?name=${data.name}&background=random`,
-          createdAt: new Date().toISOString()
-      };
-      
-      this.users[newUser.id] = newUser;
-      this.currentUser = newUser;
+    sender.balance -= amount;
+    const tx: Transaction = {
+      id: `esc_${Date.now()}`,
+      userId: senderId,
+      recipientId: receiverId,
+      recipientName: this.users[receiverId]?.name || 'Agent',
+      amount,
+      currency,
+      status: TransactionStatus.IN_ESCROW,
+      type: TransactionType.ESCROW_PAYMENT,
+      isEscrow: true,
+      serviceType: service,
+      description: `${service} Service secured payment`,
+      date: new Date().toISOString(),
+      referenceNumber: `ESC-${Math.random().toString(36).substring(7).toUpperCase()}`
+    };
+
+    this.transactions.unshift(tx);
+    this.addLog(`Escrow Locked: ${amount} ${currency}`, sender.name);
+    this.save();
+    this.emit('ESCROW_INIT', tx);
+    return tx;
+  }
+
+  releaseEscrow(txId: string) {
+    const tx = this.transactions.find(t => t.id === txId);
+    if (!tx || tx.status !== TransactionStatus.IN_ESCROW) return;
+
+    const receiver = this.users[tx.recipientId!];
+    if (receiver) {
+      receiver.balance += tx.amount;
+      receiver.totalEarned += tx.amount;
+      const wallet = receiver.wallets.find(w => w.currency === tx.currency);
+      if (wallet) wallet.balance += tx.amount;
+    }
+
+    const sender = this.users[tx.userId];
+    if (sender) sender.totalSpent += tx.amount;
+
+    tx.status = TransactionStatus.RELEASED;
+    this.addLog(`Escrow Released: ${tx.id}`, 'SYSTEM_KERNEL');
+    this.save();
+    this.emit('ESCROW_RELEASE', tx);
+  }
+
+  // --- Admin Operations ---
+  updateUserRole(adminId: string, targetId: string, role: UserRole) {
+    const admin = this.users[adminId];
+    if (admin?.role !== UserRole.SUPER_ADMIN) throw new Error("Unauthorized God-Mode action");
+    if (this.users[targetId]) {
+      this.users[targetId].role = role;
+      this.addLog(`Role Override: ${this.users[targetId].name} -> ${role}`, admin.name);
       this.save();
-      return { success: true };
+      this.emit('USER_UPDATE', this.users[targetId]);
+    }
   }
 
-  createStaffUser(data: { name: string, email: string, role: UserRole }): { success: boolean; message: string } {
-      if (Object.values(this.users).find(u => u.email === data.email)) {
-          return { success: false, message: 'Email already exists' };
-      }
-      
-      const newStaff: User = {
-          id: `staff_${Date.now()}`,
-          name: data.name,
-          email: data.email,
-          username: data.email.split('@')[0],
-          password: 'password123',
-          role: data.role,
-          accountNumber: generateAccountNumber(),
-          status: UserStatus.ACTIVE,
-          balance: 0,
-          kycLevel: 3,
-          limits: { dailyLimit: 0, weeklyLimit: 0, dailyUsed: 0, weeklyUsed: 0 },
-          avatarUrl: `https://ui-avatars.com/api/?name=${data.name}&background=random`,
-          createdAt: new Date().toISOString()
-      };
-      
-      this.users[newStaff.id] = newStaff;
+  manuallyAdjustBalance(adminId: string, targetId: string, amount: number) {
+    const admin = this.users[adminId];
+    if (admin?.role !== UserRole.SUPER_ADMIN) throw new Error("Unauthorized");
+    const user = this.users[targetId];
+    if (user) {
+      user.balance = amount;
+      const wallet = user.wallets.find(w => w.isDefault);
+      if (wallet) wallet.balance = amount;
+      this.addLog(`Balance Adjustment: ${user.name} set to ${amount}`, admin.name);
       this.save();
-      return { success: true, message: `Staff account created. Default password: password123` };
+    }
   }
 
-  completeOnboarding(userId: string, data: Partial<Agent>) {
-      if (this.users[userId]) {
-          // Merge existing user data with new onboarding data
-          this.users[userId] = { ...this.users[userId], ...data };
-          
-          if (this.users[userId].role === UserRole.AGENT) {
-              const agent = this.users[userId] as Agent;
-              agent.status = UserStatus.PENDING_APPROVAL;
-              agent.verificationStatus = VerificationStatus.PENDING;
-              
-              // Generate Agent Number based on category if not exists
-              if (!agent.agentNumber) {
-                  agent.agentNumber = generateAgentNumber(agent.category || AgentCategory.OTHER);
-              }
-              
-              agent.totalCommission = 0;
-              agent.completedJobs = 0;
-              agent.rating = 5.0;
-              agent.ratingCount = 0;
-              agent.isOnline = true;
-          } else {
-              this.users[userId].status = UserStatus.ACTIVE;
-              this.users[userId].verificationStatus = VerificationStatus.VERIFIED;
-          }
-          this.currentUser = this.users[userId];
-          this.save();
-      }
+  getTickets(scope: 'USER' | 'ALL' = 'USER'): SupportTicket[] {
+    if (scope === 'ALL') return this.supportTickets;
+    return this.supportTickets.filter(t => t.userId === this.currentUser?.id);
   }
 
-  getCurrentUser() {
-    return this.currentUser;
-  }
-
-  getAllUsers() {
-      return Object.values(this.users).filter(u => u.status !== UserStatus.DELETED);
-  }
-
-  updateUserProfile(userId: string, data: Partial<User>) {
-      if (this.users[userId]) {
-          Object.assign(this.users[userId], data);
-          if (this.currentUser && this.currentUser.id === userId) {
-              this.currentUser = { ...this.users[userId] };
-          }
-          this.save();
-      }
-  }
-
-  deleteUser(userId: string) {
-      if (this.users[userId]) {
-          this.users[userId].status = UserStatus.DELETED;
-          this.users[userId].verificationStatus = VerificationStatus.SUSPENDED;
-          if (this.currentUser && this.currentUser.id === userId) {
-              this.currentUser = null;
-          }
-          this.save();
-      }
-  }
-
-  // --- System Settings ---
-  getSystemSettings() {
-      return this.systemSettings;
-  }
-  
-  updateSystemSettings(newSettings: Partial<SystemSettings>) {
-      this.systemSettings = { ...this.systemSettings, ...newSettings };
+  sendTicketMessage(ticketId: string, senderId: string, text: string, isAdmin: boolean) {
+    const ticket = this.supportTickets.find(t => t.id === ticketId);
+    if (ticket) {
+      ticket.messages.push({
+        id: `m_${Date.now()}`,
+        senderId,
+        text,
+        timestamp: new Date().toISOString(),
+        isAdmin
+      });
+      ticket.updatedAt = new Date().toISOString();
       this.save();
+      this.emit('TICKET_UPDATE', ticket);
+    }
   }
 
-  // --- Chat System ---
+  // --- Marketplace & Staff ---
+  getAgents(): Agent[] {
+    return this.agents;
+  }
+
+  getStaffDirectory() {
+    return Object.values(this.users).filter(u => 
+      [UserRole.ADMIN, UserRole.SUPPORT, UserRole.SUPER_ADMIN].includes(u.role)
+    );
+  }
+
+  // --- Helpers ---
+  getCurrentUser() { return this.currentUser; }
+  getAllUsers() { return Object.values(this.users); }
+  getTransactions(scope: 'USER' | 'ALL' = 'USER') { 
+    if (scope === 'ALL') return this.transactions;
+    return this.transactions.filter(t => t.userId === this.currentUser?.id || t.recipientId === this.currentUser?.id);
+  }
+  getSystemLogs() { return this.logs; }
+  getMarketData(): MarketData[] { 
+    return [{ currency: 'BTC', price: 64230, change24h: 4.25, trend: 'UP', lastUpdated: new Date().toISOString() }];
+  }
+  getAds() { return [{ id: 'ad1', text: 'Professional Agents earn 0.5% higher on P2P Escrow.', color: 'bg-[#10B981]' }]; }
+  isWalletNumberAvailable(num: string) { return !Object.values(this.users).some(u => u.walletNumber === num); }
+  getUserByAccountNumber(num: string) { return Object.values(this.users).find(u => u.accountNumber === num || u.walletNumber === num); }
+  requestTransaction(tx: any) { this.transactions.unshift(tx); this.save(); }
+  getExchangeRate(f: string, t: string) { return 1; }
+  isFaceIdEnrolled(e: string) { return true; }
+  getAuthenticationOptions(e: string) { return { challenge: 'MOCK_CHALLENGE' }; }
+  verifyAuthentication(e: string, c: any) { return { success: true }; }
+  completeOnboarding(uid: string, data: any) {
+    if (this.users[uid]) {
+      this.users[uid].status = UserStatus.ACTIVE;
+      this.save();
+    }
+  }
+
   getChatSession(userId: string): ChatSession {
-      if (!this.chatSessions[userId]) {
-          // Create new session if none exists
-          const user = this.users[userId];
-          this.chatSessions[userId] = {
-              userId,
-              userName: user ? user.name : 'Guest',
-              avatarUrl: user?.avatarUrl,
-              messages: [
-                  { 
-                      id: 'welcome', 
-                      senderId: 'system', 
-                      text: 'Welcome to Support! How can we help you today?', 
-                      timestamp: new Date().toISOString(),
-                      isSupport: true
-                  }
-              ],
-              lastMessageAt: new Date().toISOString(),
-              unreadCount: 0
-          };
-          this.save();
-      }
-      return this.chatSessions[userId];
-  }
-
-  getAllChatSessions(): ChatSession[] {
-      return Object.values(this.chatSessions).sort((a, b) => 
-          new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-      );
+    return {
+      messages: [
+        { id: 'm1', text: 'How can we help you?', timestamp: new Date().toISOString(), isSupport: true }
+      ]
+    };
   }
 
   sendChatMessage(userId: string, text: string, isSupport: boolean) {
-      const session = this.getChatSession(userId);
-      const newMessage: ChatMessage = {
-          id: `msg_${Date.now()}`,
-          senderId: isSupport ? 'support' : userId,
-          text,
-          timestamp: new Date().toISOString(),
-          isSupport
-      };
-      
-      session.messages.push(newMessage);
-      session.lastMessageAt = newMessage.timestamp;
-      if (!isSupport) session.unreadCount += 1; // Mark unread for support agent
-      else session.unreadCount = 0; // Clear unread if support replies
-
-      this.save();
-      return newMessage;
-  }
-
-  // --- Users & Agents ---
-  getAgents(): Agent[] {
-    // Return all agents that are active, not suspended, and have rating > 2.0
-    return Object.values(this.users)
-        .filter(u => u.role === UserRole.AGENT && u.status === UserStatus.ACTIVE && (u as Agent).rating >= 2.0) as Agent[];
-  }
-
-  toggleUserSuspension(userId: string) {
-      const user = this.users[userId];
-      if (user) {
-          const newStatus = user.status === UserStatus.SUSPENDED ? UserStatus.ACTIVE : UserStatus.SUSPENDED;
-          user.status = newStatus;
-          user.verificationStatus = newStatus === UserStatus.SUSPENDED ? VerificationStatus.SUSPENDED : VerificationStatus.VERIFIED;
-          this.logAdminAction(newStatus === UserStatus.SUSPENDED ? 'SUSPEND' : 'REACTIVATE', userId, 'Manual status toggle');
-          this.save();
-      }
-  }
-
-  verifyUser(userId: string) {
-      const user = this.users[userId];
-      if (user) {
-          user.isVerified = true;
-          user.verificationStatus = VerificationStatus.VERIFIED;
-          this.logAdminAction('VERIFY_KYC', userId, 'Manual verification');
-          this.save();
-      }
-  }
-
-  approveUser(userId: string) {
-      const user = this.users[userId];
-      if (user) {
-          user.status = UserStatus.ACTIVE;
-          user.verificationStatus = VerificationStatus.VERIFIED;
-          user.kycLevel = 2; // Bump tier on approval
-          this.logAdminAction('APPROVE_AGENT', userId, 'Agent application approved');
-          this.save();
-      }
-  }
-
-  rejectUser(userId: string, reason: string) {
-      const user = this.users[userId];
-      if (user) {
-          user.status = UserStatus.ACTIVE; // Active but as a user
-          user.verificationStatus = VerificationStatus.REJECTED;
-          user.verificationNotes = reason;
-          // Demote to User
-          user.role = UserRole.USER;
-          this.logAdminAction('REJECT_AGENT', userId, `Reason: ${reason}`);
-          this.save();
-      }
-  }
-
-  shouldShowAds(user: User): boolean {
-      if (user.role === UserRole.ADMIN || user.role === UserRole.SUPPORT) return false;
-      if (user.kycLevel >= 3) return false; // Elite tier
-      return true;
-  }
-
-  // --- Transactions ---
-  getTransactions(filter: 'ALL' | 'USER' = 'USER'): Transaction[] {
-    if (filter === 'ALL') return this.transactions;
-    if (!this.currentUser) return [];
-    return this.transactions.filter(t => t.userId === this.currentUser!.id);
-  }
-
-  requestTransaction(tx: Transaction): { success: boolean; message?: string } {
-    const user = this.users[tx.userId];
-    if (!user) return { success: false, message: 'User not found' };
-
-    // KYC Check
-    if (user.status !== UserStatus.ACTIVE) return { success: false, message: 'Account not active' };
-
-    if (tx.type === TransactionType.WITHDRAWAL || tx.type === TransactionType.TRANSFER || tx.type === TransactionType.PAYMENT) {
-        if (user.balance < tx.amount) return { success: false, message: 'Insufficient funds' };
-        
-        if (user.limits) {
-             if (user.limits.dailyUsed + tx.amount > user.limits.dailyLimit) return { success: false, message: `Daily limit of ₦${user.limits.dailyLimit.toLocaleString()} exceeded. Upgrade KYC.` };
-        }
-    }
-
-    if (tx.type === TransactionType.TRANSFER) {
-        const targetAccount = tx.description.replace('Transfer to ', '');
-        const recipientUser = Object.values(this.users).find(u => u.accountNumber === targetAccount || u.accountNumber === tx.recipientId);
-
-        if (!recipientUser) return { success: false, message: 'Recipient account not found' };
-        if (recipientUser.id === user.id) return { success: false, message: 'Cannot transfer to yourself' };
-
-        user.balance -= tx.amount;
-        user.limits!.dailyUsed += tx.amount;
-        
-        recipientUser.balance += tx.amount;
-        
-        tx.status = TransactionStatus.COMPLETED;
-        this.transactions.unshift(tx);
-        
-        const creditTx: Transaction = {
-            ...tx,
-            id: `tx_${Date.now()}_rec`,
-            userId: recipientUser.id,
-            type: TransactionType.DEPOSIT,
-            description: `Transfer from ${user.name} (${user.accountNumber})`,
-            status: TransactionStatus.COMPLETED
-        };
-        this.transactions.unshift(creditTx);
-        this.save();
-        return { success: true };
-    } 
-    else if (tx.type === TransactionType.WITHDRAWAL) {
-        user.balance -= tx.amount;
-        user.limits!.dailyUsed += tx.amount;
-        tx.status = TransactionStatus.PENDING;
-        this.transactions.unshift(tx);
-        this.save();
-        return { success: true, message: 'Withdrawal requested. Funds deducted pending approval.' };
-    }
-    else if (tx.type === TransactionType.PAYMENT) {
-        const merchant = Object.values(this.users).find(u => u.accountNumber === tx.description.replace('Payment to ', ''));
-        
-        user.balance -= tx.amount;
-        user.limits!.dailyUsed += tx.amount;
-        tx.status = TransactionStatus.COMPLETED;
-        this.transactions.unshift(tx);
-
-        if (merchant) {
-            merchant.balance += tx.amount;
-            const creditTx: Transaction = {
-                ...tx,
-                id: `tx_${Date.now()}_merch`,
-                userId: merchant.id,
-                type: TransactionType.DEPOSIT,
-                description: `Payment from ${user.name}`,
-                status: TransactionStatus.COMPLETED
-            };
-            this.transactions.unshift(creditTx);
-        }
-        this.save();
-        return { success: true };
-    }
-    else if (tx.type === TransactionType.DEPOSIT) {
-        tx.status = TransactionStatus.PENDING;
-        this.transactions.unshift(tx);
-        this.save();
-        return { success: true, message: 'Deposit request submitted for review.' };
-    }
-
-    return { success: false };
-  }
-
-  updateTransactionStatus(id: string, status: TransactionStatus) {
-      const tx = this.transactions.find(t => t.id === id);
-      if (tx) {
-          const user = this.users[tx.userId];
-          if (tx.type === TransactionType.DEPOSIT && tx.status === TransactionStatus.PENDING && status === TransactionStatus.COMPLETED) {
-              if (user) user.balance += tx.amount;
-          }
-          if (tx.type === TransactionType.WITHDRAWAL && tx.status === TransactionStatus.PENDING && status === TransactionStatus.FAILED) {
-              if (user) {
-                  user.balance += tx.amount;
-                  user.limits!.dailyUsed -= tx.amount;
-              }
-          }
-          tx.status = status;
-          this.logAdminAction(`TX_${status}`, tx.userId, `Transaction ${tx.id} updated to ${status}`);
-          this.save();
-      }
-  }
-
-  // --- Loans ---
-  getLoans(userId?: string) {
-      if (userId) return this.loans.filter(l => l.userId === userId);
-      return this.loans;
-  }
-
-  requestLoan(userId: string, amount: number, tier: LoanTier): { success: boolean; message: string } {
-      const user = this.users[userId];
-      // KYC Check
-      if (user.kycLevel < 2 && tier === LoanTier.SILVER) return { success: false, message: 'Silver loans require Tier 2 KYC.' };
-      if (user.kycLevel < 3 && tier === LoanTier.GOLD) return { success: false, message: 'Gold loans require Tier 3 KYC.' };
-
-      const activeLoan = this.loans.find(l => l.userId === userId && l.status !== LoanStatus.PAID && l.status !== LoanStatus.REJECTED);
-      if (activeLoan) return { success: false, message: 'You already have an active loan.' };
-
-      const loan: Loan = {
-          id: `loan_${Date.now()}`,
-          userId,
-          amount,
-          tier,
-          status: LoanStatus.PENDING,
-          dateRequested: new Date().toISOString(),
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          interest: 0.05,
-          totalRepayment: amount * 1.05
-      };
-      this.loans.unshift(loan);
-      this.save();
-      return { success: true, message: 'Loan application submitted.' };
-  }
-
-  approveLoan(loanId: string) {
-      const loan = this.loans.find(l => l.id === loanId);
-      if (loan && loan.status === LoanStatus.PENDING) {
-          loan.status = LoanStatus.APPROVED;
-          const user = this.users[loan.userId];
-          if (user) {
-              user.balance += loan.amount;
-              const tx: Transaction = {
-                  id: `tx_loan_${loan.id}`,
-                  userId: user.id,
-                  type: TransactionType.LOAN_DISBURSEMENT,
-                  amount: loan.amount,
-                  date: new Date().toISOString(),
-                  status: TransactionStatus.COMPLETED,
-                  description: `Loan Disbursement - ${loan.tier}`
-              };
-              this.transactions.unshift(tx);
-              this.logAdminAction('APPROVE_LOAN', user.id, `Loan ${loanId} approved`);
-              this.save();
-          }
-      }
-  }
-
-  rejectLoan(loanId: string) {
-      const loan = this.loans.find(l => l.id === loanId);
-      if (loan) {
-          loan.status = LoanStatus.REJECTED;
-          this.logAdminAction('REJECT_LOAN', loan.userId, `Loan ${loanId} rejected`);
-          this.save();
-      }
-  }
-
-  upgradeUserTier(userId: string) {
-      const user = this.users[userId];
-      if (user && user.kycLevel < 3) {
-          user.kycLevel += 1;
-          const newLimits = KYC_TIERS[user.kycLevel];
-          if (user.limits && newLimits) {
-              user.limits.dailyLimit = newLimits.daily;
-              user.limits.weeklyLimit = newLimits.weekly;
-          }
-          this.logAdminAction('UPGRADE_TIER', userId, `Upgraded to Tier ${user.kycLevel}`);
-          this.save();
-      }
-  }
-
-  // --- Ads ---
-  getAds() { return this.ads.filter(a => a.active); }
-  addAd(text: string, color: string) {
-      this.ads.push({ id: `ad_${Date.now()}`, text, color, active: true });
-      this.save();
-  }
-  deleteAd(id: string) {
-      this.ads = this.ads.filter(a => a.id !== id);
-      this.save();
-  }
-
-  // --- Agent Workstation ---
-  getServiceRequests(agentId: string) {
-      return this.serviceRequests.filter(r => r.agentId === agentId);
-  }
-
-  createServiceRequest(userId: string, agentId: string, serviceType: string): { success: boolean; message: string } {
-      const user = this.users[userId];
-      const request: ServiceRequest = {
-          id: `req_${Date.now()}`,
-          userId,
-          agentId,
-          serviceType,
-          status: ServiceRequestStatus.PENDING,
-          date: new Date().toISOString(),
-          userName: user ? user.name : 'Unknown User'
-      };
-      this.serviceRequests.unshift(request);
-      this.save();
-      return { success: true, message: 'Request sent to agent. Waiting for acceptance...' };
-  }
-
-  respondToServiceRequest(reqId: string, status: ServiceRequestStatus) {
-      const req = this.serviceRequests.find(r => r.id === reqId);
-      if (req) {
-          req.status = status;
-          // Implications: If Accepted, Agent is BUSY
-          const agent = this.users[req.agentId] as Agent;
-          if (agent && status === ServiceRequestStatus.ACCEPTED) {
-              agent.isOnline = false; // Busy
-          }
-           if (agent && status === ServiceRequestStatus.REJECTED) {
-               // Agent becomes available again immediately if they were busy (though usually reject comes from pending)
-               agent.isOnline = true;
-           }
-          this.save();
-      }
-  }
-
-  completeServiceRequest(reqId: string) {
-      const req = this.serviceRequests.find(r => r.id === reqId);
-      if (req && req.status === ServiceRequestStatus.ACCEPTED) {
-          req.status = ServiceRequestStatus.COMPLETED;
-          const agent = this.users[req.agentId] as Agent;
-          if (agent) {
-              agent.completedJobs += 1;
-              const commission = 500; 
-              agent.totalCommission += commission;
-              agent.balance += commission;
-              
-              // Implications: Job done -> Agent Online
-              agent.isOnline = true;
-
-              // Rating Simulation (In real app user provides this)
-              // If rating drops low -> Auto Suspend
-              // Simulate a rating for this job
-              const jobRating = Math.random() > 0.1 ? 5 : 1; 
-              const newRating = ((agent.rating * agent.ratingCount) + jobRating) / (agent.ratingCount + 1);
-              agent.rating = parseFloat(newRating.toFixed(1));
-              agent.ratingCount += 1;
-
-              if (agent.rating < 2.0) {
-                  agent.status = UserStatus.SUSPENDED;
-                  this.logAdminAction('AUTO_SUSPEND', agent.id, `Rating dropped to ${agent.rating}`);
-              }
-
-              this.save();
-          }
-      }
-  }
-
-  toggleAgentOnlineStatus(agentId: string) {
-      const agent = this.users[agentId] as Agent;
-      if (agent) {
-          // Prevent going online if currently in an active job
-          const activeJobs = this.serviceRequests.filter(r => r.agentId === agentId && r.status === ServiceRequestStatus.ACCEPTED);
-          if (activeJobs.length > 0) return; // Locked
-
-          agent.isOnline = !agent.isOnline;
-          this.save();
-      }
-  }
-
-  updateAgentProfile(agentId: string, data: Partial<Agent>) {
-      const agent = this.users[agentId] as Agent;
-      if (agent) {
-          Object.assign(agent, data);
-          // If critical info changed, maybe mark pending review?
-          this.save();
-      }
+    console.log(`Support chat from ${userId}: ${text}`);
   }
 }
 

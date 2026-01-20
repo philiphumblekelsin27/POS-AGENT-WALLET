@@ -13,8 +13,9 @@ const PUBLISHER_ID = 'ca-pub-XXXXXXXXXXXXXXXX';
 export const GoogleAd: React.FC<GoogleAdProps> = ({ slotId, format = 'auto', className }) => {
   useEffect(() => {
     try {
-      if (window.adsbygoogle) {
-        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      // Fix: Cast window to any to access adsbygoogle
+      if ((window as any).adsbygoogle) {
+        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
       }
     } catch (e) {
       console.error("AdSense error:", e);

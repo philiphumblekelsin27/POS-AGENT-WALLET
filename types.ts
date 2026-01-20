@@ -1,11 +1,11 @@
 
-
 export enum UserRole {
   USER = 'USER',
   AGENT = 'AGENT',
   MERCHANT = 'MERCHANT',
+  SUPPORT = 'SUPPORT',
   ADMIN = 'ADMIN',
-  SUPPORT = 'SUPPORT'
+  SUPER_ADMIN = 'SUPER_ADMIN'
 }
 
 export enum UserStatus {
@@ -13,162 +13,101 @@ export enum UserStatus {
   PENDING_SETUP = 'PENDING_SETUP', 
   PENDING_APPROVAL = 'PENDING_APPROVAL', 
   SUSPENDED = 'SUSPENDED',
-  REJECTED = 'REJECTED',
-  DELETED = 'DELETED'
+  REJECTED = 'REJECTED'
 }
 
 export enum VerificationStatus {
   UNVERIFIED = 'UNVERIFIED',
   PENDING = 'PENDING',
   VERIFIED = 'VERIFIED',
-  REJECTED = 'REJECTED',
-  SUSPENDED = 'SUSPENDED'
+  REJECTED = 'REJECTED'
 }
 
-export enum AgentCategory {
-  POS = 'POS',
-  DRIVER = 'DRIVER',
-  HOTEL = 'HOTEL',
-  DELIVERY = 'DELIVERY',
-  HAIRDRESSER = 'HAIRDRESSER',
-  CLEANER = 'CLEANER',
-  TRADES = 'TRADES', // Plumber, Electrician
-  MERCHANT = 'MERCHANT',
-  HEALTH = 'HEALTH',
-  EDUCATION = 'EDUCATION', // Tutor
-  EVENT = 'EVENT',
-  OTHER = 'OTHER'
+export enum TransactionStatus {
+  PENDING = 'PENDING',
+  IN_ESCROW = 'IN_ESCROW',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  FLAGGED = 'FLAGGED',
+  RELEASED = 'RELEASED',
+  REFUNDED = 'REFUNDED',
+  DISPUTED = 'DISPUTED'
 }
 
 export enum TransactionType {
   DEPOSIT = 'DEPOSIT',
   WITHDRAWAL = 'WITHDRAWAL',
   TRANSFER = 'TRANSFER',
-  PAYMENT = 'PAYMENT',
-  LOAN_DISBURSEMENT = 'LOAN_DISBURSEMENT',
-  LOAN_REPAYMENT = 'LOAN_REPAYMENT'
+  SWAP = 'SWAP',
+  ESCROW_PAYMENT = 'ESCROW_PAYMENT',
+  SYSTEM_ADJUSTMENT = 'SYSTEM_ADJUSTMENT'
 }
 
-export enum TransactionStatus {
-  PENDING = 'PENDING',
-  COMPLETED = 'COMPLETED',
-  FAILED = 'FAILED',
-  FLAGGED = 'FLAGGED'
+export interface LatLng {
+  lat: number;
+  lng: number;
 }
 
-export interface BankAccount {
+export enum AgentCategory {
+  POS = 'POS',
+  DRIVER = 'DRIVER',
+  HOTEL = 'HOTEL',
+  BARBER = 'BARBER',
+  DELIVERY = 'DELIVERY',
+  ELECTRICIAN = 'ELECTRICIAN',
+  OTHER = 'OTHER'
+}
+
+export interface MultiCurrencyWallet {
   id: string;
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-}
-
-export interface SystemSettings {
-  bankAccounts: BankAccount[];
-  supportPhone: string;
-  supportEmail: string;
-}
-
-export interface KycLimits {
-  dailyLimit: number;
-  weeklyLimit: number;
-  dailyUsed: number;
-  weeklyUsed: number;
-}
-
-export interface KycData {
-  dob?: string;
-  gender?: string;
-  nin?: string;
-  bvn?: string;
-  address?: string;
-  idType?: string;
-  idNumber?: string;
-  idFrontUrl?: string;
-  idBackUrl?: string;
-  selfieUrl?: string;
-  proofOfAddressUrl?: string;
+  currency: string; 
+  balance: number;
+  isDefault: boolean;
 }
 
 export interface User {
   id: string;
   username: string;
   name: string;
+  displayName?: string;
+  bio?: string;
   email: string;
   password?: string; 
-  accountNumber: string; // Wallet Number
+  pin?: string; 
+  walletNumber: string; // 6-digit ID
+  accountNumber: string; 
   phone?: string;
   role: UserRole;
   status: UserStatus;
-  balance: number;
-  kycLevel: number; // 0..3
+  balance: number; 
+  wallets: MultiCurrencyWallet[]; 
+  preferredCurrency: string; 
+  kycLevel: number;
   avatarUrl?: string;
-  location?: { lat: number; lng: number };
-  limits?: KycLimits;
-  kycData?: KycData; 
-  bio?: string;
-  interests?: string[];
-  isVerified?: boolean;
   verificationStatus?: VerificationStatus;
-  verificationNotes?: string;
   createdAt: string;
-}
-
-// Service Specific Fields
-export interface DriverDetails {
-  vehicleMake: string;
-  vehicleModel: string;
-  plateNumber: string;
-  color: string;
-  licenseNumber: string;
-}
-
-export interface HotelDetails {
-  checkInTime: string;
-  checkOutTime: string;
-  amenities: string[];
-  roomRate: number;
-}
-
-export interface POSDetails {
-  shopAddress: string;
-  cashCapacity: number;
-}
-
-export interface Agent extends User {
-  agentNumber: string; // AN-CAT-XXXX
-  businessName: string;
-  category: AgentCategory;
-  subcategories: string[];
-  description: string;
+  
+  // Professional Update Fields
+  referralCode: string;
+  referredBy?: string;
+  totalSpent: number;
+  totalEarned: number;
   rating: number;
-  ratingCount: number;
-  isOnline: boolean;
-  services: string[]; // Legacy simple list
-  workingHours?: string;
-  pricingModel?: 'FIXED' | 'HOURLY' | 'COMMISSION';
+  reviewCount: number;
+  businessAddress?: string;
+  businessPhoto?: string;
   
-  // Specific Data
-  driverDetails?: DriverDetails;
-  hotelDetails?: HotelDetails;
-  posDetails?: POSDetails;
-  
-  // Documents
-  documents?: {
-    businessRegUrl?: string;
-    certificateUrl?: string;
-    insuranceUrl?: string;
-  };
-
-  portfolioImages?: string[];
-  bankDetails?: {
+  // Financial Prefs
+  privacyMode?: boolean;
+  externalBank?: {
     bankName: string;
     accountNumber: string;
     accountName: string;
   };
-  
-  totalCommission: number;
-  completedJobs: number;
+
+  limits?: {
+    dailyLimit: number;
+  };
 }
 
 export interface Transaction {
@@ -176,27 +115,107 @@ export interface Transaction {
   userId: string;
   type: TransactionType;
   amount: number;
+  currency: string;
+  toCurrency?: string; 
   date: string; 
   status: TransactionStatus;
   description: string;
-  receiptUrl?: string;
-  aiConfidence?: number;
-  aisuggestedAmount?: number;
-  recipientId?: string; 
+  recipientId?: string;
+  recipientName?: string;
+  isEscrow?: boolean;
+  serviceType?: AgentCategory;
+  referenceNumber?: string;
+}
+
+export interface SystemLog {
+  id: string;
+  event: string;
+  user: string;
+  timestamp: string;
+}
+
+export interface RealTimeEvent {
+  type: string;
+  payload: any;
+  timestamp: string;
+}
+
+export interface MarketData {
+  currency: string;
+  price: number;
+  change24h: number; 
+  trend: 'UP' | 'DOWN' | 'NEUTRAL';
+  lastUpdated: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  text: string;
+  timestamp: string;
+  isAdmin: boolean;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userName: string;
+  subject: string;
+  status: 'OPEN' | 'CLOSED';
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AIInsight {
+  type: 'ADVICE' | 'ALERT' | 'OPPORTUNITY';
+  message: string;
+  actionLabel?: string;
+  actionTarget?: string;
+}
+
+export interface Agent {
+  id: string;
+  userId: string;
+  businessName: string;
+  category: AgentCategory;
+  avatarUrl: string;
+  rating: number;
+  ratingCount: number;
+  isOnline: boolean;
+  location?: LatLng;
+  basePrice: number;
+  verificationStatus: VerificationStatus;
+  phone?: string;
+  description?: string;
+  operatingHours?: string;
+  travelRadius?: number; // in km
 }
 
 export interface Ad {
   id: string;
   text: string;
-  color: string;
-  active: boolean;
+  color?: string;
 }
 
-export enum LoanStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  PAID = 'PAID'
+export enum WalletStatus {
+  ACTIVE = 'ACTIVE',
+  FROZEN = 'FROZEN',
+  MAINTENANCE = 'MAINTENANCE'
+}
+
+export interface WealthInsight {
+  category: string;
+  percentage: number;
+  trend: 'UP' | 'DOWN';
+  message: string;
+}
+
+export interface Notification {
+  id: string;
+  message: string;
+  type: 'SUCCESS' | 'ERROR' | 'INFO' | 'LIVE';
+  timestamp: string;
 }
 
 export enum LoanTier {
@@ -209,68 +228,17 @@ export interface Loan {
   id: string;
   userId: string;
   amount: number;
-  interest: number;
   totalRepayment: number;
   dueDate: string;
-  status: LoanStatus;
+  status: 'PENDING' | 'APPROVED' | 'REPAID' | 'DEFAULTED';
   tier: LoanTier;
-  dateRequested: string;
-}
-
-export enum ServiceRequestStatus {
-  PENDING = 'PENDING',
-  ACCEPTED = 'ACCEPTED',
-  REJECTED = 'REJECTED',
-  COMPLETED = 'COMPLETED'
-}
-
-export interface ServiceRequest {
-  id: string;
-  userId: string;
-  agentId: string;
-  serviceType: string;
-  status: ServiceRequestStatus;
-  date: string;
-  userName: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  senderId: string;
-  text: string;
-  timestamp: string;
-  isSupport: boolean;
 }
 
 export interface ChatSession {
-  userId: string;
-  userName: string;
-  avatarUrl?: string;
-  messages: ChatMessage[];
-  lastMessageAt: string;
-  unreadCount: number;
-}
-
-export interface AuditLog {
-  id: string;
-  adminId: string;
-  action: string;
-  targetId: string;
-  details: string;
-  timestamp: string;
-}
-
-export interface ViolationLevel {
-    level: number;
-    description: string;
-    action: string;
-}
-
-// Global Types for Google Integration
-declare global {
-  interface Window {
-    google: any;
-    initMap: () => void;
-    adsbygoogle: any[];
-  }
+    messages: {
+        id: string;
+        text: string;
+        timestamp: string;
+        isSupport: boolean;
+    }[];
 }

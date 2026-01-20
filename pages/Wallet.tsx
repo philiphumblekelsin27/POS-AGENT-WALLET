@@ -1,330 +1,230 @@
 
-
-import React, { useState, useEffect } from 'react';
-import { User, Transaction, TransactionType, TransactionStatus, BankAccount } from '../types';
-import { analyzeReceipt } from '../services/aiService';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { User, Transaction, TransactionType, TransactionStatus, MultiCurrencyWallet, WalletStatus, WealthInsight } from '../types';
 import { mockStore } from '../services/mockStore';
+import { analyzeReceipt, AnalysisResult } from '../services/aiService';
+import { Modal } from '../components/Modal';
+import { SlideToConfirm } from '../components/SlideToConfirm';
+// Fixed: Added Wallet as WalletIcon to the lucide-react imports
+import { ArrowUpRight, ArrowDownLeft, Repeat, Camera, History, PieChart, Shield, Info, ChevronDown, Wallet as WalletIcon } from 'lucide-react';
 
 interface WalletProps {
   user: User;
   onAddTransaction: (tx: Transaction) => void;
-  initialTab?: 'topup' | 'withdraw' | 'transfer';
+  initialTab?: 'topup' | 'withdraw' | 'transfer' | 'swap';
+  onRefresh?: () => void;
 }
 
-export const Wallet: React.FC<WalletProps> = ({ user, onAddTransaction, initialTab }) => {
-  const [activeTab, setActiveTab] = useState<'topup' | 'withdraw' | 'transfer'>(initialTab || 'topup');
+export const Wallet: React.FC<WalletProps> = ({ user, onAddTransaction, initialTab, onRefresh }) => {
+  const [activeTab, setActiveTab] = useState<'topup' | 'withdraw' | 'transfer' | 'swap'>(initialTab || 'topup');
+  const [activeWallet, setActiveWallet] = useState<MultiCurrencyWallet>(user.wallets.find(w => w.currency === user.preferredCurrency) || user.wallets[0]);
+  const [targetCurrency, setTargetCurrency] = useState<string>('NGN');
   const [amount, setAmount] = useState('');
   const [recipientAccount, setRecipientAccount] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<{amount: number, confidence: number} | null>(null);
+  const [recipientName, setRecipientName] = useState<string | null>(null);
+  const [history, setHistory] = useState<Transaction[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<AnalysisResult | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Top Up State
-  const [selectedBank, setSelectedBank] = useState<BankAccount | null>(null);
-  const [timer, setTimer] = useState<number | null>(null); // Time in seconds
+  const wealthInsights: WealthInsight[] = [
+    { category: 'Transport', percentage: 12, trend: 'UP', message: "You spent 12% more on Transport this month than last month." },
+    { category: 'Savings', percentage: 5, trend: 'DOWN', message: "Your currency swaps saved you ₦4,200 in fees this week." }
+  ];
 
-  const settings = mockStore.getSystemSettings();
-  const limits = user.limits || { dailyLimit: 0, dailyUsed: 0, weeklyLimit: 0, weeklyUsed: 0 };
-  const dailyPercent = Math.min((limits.dailyUsed / limits.dailyLimit) * 100, 100);
-
-  // Countdown Timer Logic
   useEffect(() => {
-      let interval: any;
-      if (timer !== null && timer > 0) {
-          interval = setInterval(() => {
-              setTimer(prev => (prev !== null && prev > 0 ? prev - 1 : 0));
-          }, 1000);
-      } else if (timer === 0) {
-          // Time expired
-          setSelectedBank(null);
-          setTimer(null);
-      }
-      return () => clearInterval(interval);
-  }, [timer]);
+    setHistory(mockStore.getTransactions('USER'));
+  }, [user.wallets]);
 
-  const handleStartTopUp = () => {
-      if (settings.bankAccounts.length > 0) {
-          // Randomly select a bank account
-          const randomBank = settings.bankAccounts[Math.floor(Math.random() * settings.bankAccounts.length)];
-          setSelectedBank(randomBank);
-          setTimer(30 * 60); // 30 Minutes
-      } else {
-          alert("No bank accounts configured by admin.");
-      }
-  };
-
-  const formatTime = (seconds: number) => {
-      const m = Math.floor(seconds / 60);
-      const s = seconds % 60;
-      return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      setFile(selectedFile);
-      
-      setIsProcessing(true);
-      try {
-        const result = await analyzeReceipt(selectedFile);
-        setAnalysisResult({
-          amount: result.suggestedAmount,
-          confidence: result.confidence
-        });
-        setAmount(result.suggestedAmount.toString());
-      } finally {
-        setIsProcessing(false);
-      }
+  useEffect(() => {
+    if (recipientAccount.length >= 10) {
+      const foundUser = mockStore.getUserByAccountNumber(recipientAccount);
+      setRecipientName(foundUser ? foundUser.name : null);
+    } else {
+      setRecipientName(null);
     }
-  };
+  }, [recipientAccount]);
 
-  const handleSubmit = () => {
-    if (!amount) return;
-    
-    let type = TransactionType.DEPOSIT;
-    let description = 'Manual Deposit via Receipt';
-
-    if (activeTab === 'withdraw') {
-        type = TransactionType.WITHDRAWAL;
-        description = 'Withdrawal Request';
-    } else if (activeTab === 'transfer') {
-        type = TransactionType.TRANSFER;
-        description = `Transfer to ${recipientAccount}`;
-    }
-
+  const handleConfirmAction = () => {
     const newTx: Transaction = {
       id: `tx_${Date.now()}`,
       userId: user.id,
-      type: type,
+      type: activeTab === 'topup' ? TransactionType.DEPOSIT : activeTab === 'withdraw' ? TransactionType.WITHDRAWAL : TransactionType.TRANSFER,
       amount: parseFloat(amount),
+      currency: activeWallet.currency,
+      toCurrency: activeTab === 'transfer' ? targetCurrency : undefined,
       date: new Date().toISOString(),
-      status: TransactionStatus.PENDING,
-      description: description,
-      receiptUrl: file ? URL.createObjectURL(file) : undefined,
-      aiConfidence: analysisResult?.confidence,
-      aisuggestedAmount: analysisResult?.amount
+      status: TransactionStatus.COMPLETED,
+      description: activeTab === 'topup' ? `Wallet Top Up (${activeWallet.currency})` : activeTab === 'withdraw' ? 'Bank Payout' : `Node Transfer to ${recipientName || recipientAccount}`,
+      recipientId: recipientAccount,
+      referenceNumber: scanResult?.referenceNumber || `REF-${Date.now()}`
     };
 
     onAddTransaction(newTx);
-    
-    // Clear form
     setAmount('');
     setRecipientAccount('');
-    setFile(null);
-    setAnalysisResult(null);
-    if (activeTab === 'topup') {
-        setTimer(null); // Stop timer
-        setSelectedBank(null);
-    }
+    setRecipientName(null);
+    setShowConfirm(false);
+    if (onRefresh) onRefresh();
   };
 
+  const exchangeRate = mockStore.getExchangeRate(activeWallet.currency, targetCurrency);
+  const totalToPay = parseFloat(amount) || 0;
+
   return (
-    <div className="p-6 pb-24 text-gray-900">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-gray-900">My Wallet</h2>
-        <div className="text-right">
-            <span className="text-xs text-gray-500 block">Account: <span className="text-black font-mono">{user.accountNumber}</span></span>
+    <div className="p-6 pb-32 text-white bg-[#050505] min-h-screen overflow-x-hidden">
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="text-3xl font-black tracking-tight">Vault</h2>
+        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#00F2EA]">
+          <Shield size={20} />
         </div>
       </div>
 
-      {/* KYC Progress */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
-          <div className="flex justify-between text-xs mb-2">
-            <span className="text-gray-500">Daily Limit Used</span>
-            <span className="font-bold text-black">₦{(limits.dailyUsed / 1000).toFixed(0)}k / ₦{(limits.dailyLimit / 1000).toFixed(0)}k</span>
-          </div>
-          <div className="bg-gray-100 rounded-full h-2 overflow-hidden w-full relative">
-            <div 
-                className={`h-full ${dailyPercent > 80 ? 'bg-red-500' : 'bg-green-500'} transition-all duration-500`} 
-                style={{ width: `${dailyPercent}%` }}
-            ></div>
-          </div>
-      </div>
+      {/* Phase 9 Wealth Insights */}
+      <section className="mb-10 p-5 rounded-[2rem] bg-gradient-to-br from-indigo-900/40 to-emerald-900/40 border border-white/10 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5">
+          <PieChart size={80} />
+        </div>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-1.5 h-1.5 bg-[#00F2EA] rounded-full animate-ping" />
+          <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#00F2EA]">Wealth Intelligence</h3>
+        </div>
+        <p className="text-xs font-medium leading-relaxed opacity-80">{wealthInsights[0].message}</p>
+      </section>
 
-      <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex mb-6">
-        {['topup', 'transfer', 'withdraw'].map((tab) => (
-            <button 
-            key={tab}
-            onClick={() => {
-                setActiveTab(tab as any);
-                setAmount('');
-                setRecipientAccount('');
-                setFile(null);
-            }}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all capitalize ${
-                activeTab === tab ? 'bg-black text-white shadow-md' : 'text-gray-500 hover:text-black'
+      {/* Wallet Operations Grid */}
+      <section className="grid grid-cols-2 gap-4 mb-10">
+        {[
+          { id: 'topup', icon: <ArrowDownLeft />, label: 'Add Cash', color: 'bg-emerald-500/10 text-emerald-400' },
+          { id: 'withdraw', icon: <ArrowUpRight />, label: 'Payout', color: 'bg-indigo-500/10 text-indigo-400' },
+          { id: 'transfer', icon: <Repeat />, label: 'Send Node', color: 'bg-purple-500/10 text-purple-400' },
+          { id: 'swap', icon: <PieChart />, label: 'Swap', color: 'bg-orange-500/10 text-orange-400' },
+        ].map(op => (
+          <button 
+            key={op.id}
+            onClick={() => setActiveTab(op.id as any)}
+            className={`p-5 rounded-3xl border transition-all flex flex-col gap-3 ${
+              activeTab === op.id ? 'bg-white/10 border-[#00F2EA] shadow-[0_0_20px_rgba(0,242,234,0.1)]' : 'bg-white/5 border-white/5'
             }`}
-            >
-            {tab === 'topup' ? 'Top Up' : tab}
-            </button>
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${op.color}`}>{op.icon}</div>
+            <span className="text-[10px] font-black uppercase tracking-widest">{op.label}</span>
+          </button>
         ))}
-      </div>
+      </section>
 
-      <div className="space-y-4">
-        {activeTab === 'topup' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-             {!selectedBank ? (
-                 <div className="text-center py-8">
-                     <p className="text-gray-600 text-sm mb-4">Click to reveal a secure bank account for your deposit.</p>
-                     <button 
-                        onClick={handleStartTopUp}
-                        className="bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700"
-                     >
-                        Start Deposit Process
-                     </button>
-                 </div>
-             ) : (
-                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl relative overflow-hidden">
-                   {/* Timer Badge */}
-                   <div className="absolute top-2 right-2 bg-red-100 text-red-600 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 animate-pulse">
-                       <span>⏳</span> {formatTime(timer || 0)}
-                   </div>
-
-                   <h3 className="text-sm font-semibold text-blue-800 mb-4">Make Payment Here</h3>
-                   <div className="space-y-2 text-sm text-blue-900">
-                       <p className="flex justify-between border-b border-blue-100 pb-1">
-                           <span className="text-blue-500">Bank Name:</span>
-                           <span className="font-bold">{selectedBank.bankName}</span>
-                       </p>
-                       <p className="flex justify-between border-b border-blue-100 pb-1">
-                           <span className="text-blue-500">Account Number:</span>
-                           <span className="font-bold font-mono text-lg">{selectedBank.accountNumber}</span>
-                       </p>
-                       <p className="flex justify-between pb-1">
-                           <span className="text-blue-500">Account Name:</span>
-                           <span className="font-bold">{selectedBank.accountName}</span>
-                       </p>
-                   </div>
-                   <p className="text-[10px] text-blue-600 mt-2 text-center bg-blue-100 p-1 rounded">
-                       Account expires in {formatTime(timer || 0)}. Do not save this account number.
-                   </p>
-                </div>
-             )}
-
-             <div>
-               <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-blue-500 transition-colors relative bg-gray-50">
-                 <input 
-                   type="file" 
-                   accept="image/*"
-                   onChange={handleFileChange}
-                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                 />
-                 <span className="text-2xl mb-2">📸</span>
-                 {file ? (
-                   <span className="text-sm font-medium text-green-600">{file.name}</span>
-                 ) : (
-                   <span className="text-sm text-gray-500">Tap to upload receipt</span>
-                 )}
-               </div>
-             </div>
-
-             {isProcessing && (
-               <div className="flex items-center gap-2 text-sm text-blue-600">
-                 <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                 Analyzing receipt...
-               </div>
-             )}
-
-             {analysisResult && (
-                <div className="bg-green-50 border border-green-100 p-3 rounded-lg flex items-start gap-2">
-                   <span className="text-lg">🤖</span>
-                   <div>
-                     <p className="text-xs font-bold text-green-800">AI Suggestion</p>
-                     <p className="text-xs text-green-700">
-                       We detected <strong>₦{analysisResult.amount.toLocaleString()}</strong> ({analysisResult.confidence}% confidence).
-                     </p>
-                   </div>
-                </div>
-             )}
-
-             <div>
-               <label className="block text-sm font-bold text-gray-900 mb-2">Amount</label>
-               <input 
-                  type="number" 
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-gray-900"
-                  placeholder="0.00"
-               />
-             </div>
-
-             <button 
-               onClick={handleSubmit}
-               disabled={!amount}
-               className="w-full bg-black text-white py-4 rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-             >
-               Confirm Top Up
-             </button>
+      <div className="space-y-6">
+        <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5">
+          <div className="flex justify-between items-center mb-6">
+            <label className="text-[10px] font-black uppercase tracking-widest text-white/30">Transfer Amount</label>
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 border border-white/10">
+              <span className="text-[10px] font-bold text-white/50">{activeWallet.currency}</span>
+              <ChevronDown size={12} className="text-white/30" />
+            </div>
           </div>
-        )}
+          <input 
+            type="number" 
+            value={amount} 
+            onChange={e => setAmount(e.target.value)} 
+            className="w-full bg-transparent text-5xl font-black text-center outline-none focus:text-[#00F2EA] transition-all placeholder:text-white/5" 
+            placeholder="0.00" 
+          />
+        </div>
 
         {activeTab === 'transfer' && (
-           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <p className="text-sm text-gray-500">Available Balance</p>
-                <p className="text-2xl font-bold text-gray-900">₦ {user.balance.toLocaleString()}</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2">Recipient Wallet Number</label>
-                <input 
-                   type="text" 
-                   value={recipientAccount}
-                   onChange={(e) => setRecipientAccount(e.target.value)}
-                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-black font-mono text-gray-900"
-                   placeholder="XXXX-XX-XXXX"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2">Amount</label>
-                <input 
-                   type="number" 
-                   value={amount}
-                   onChange={(e) => setAmount(e.target.value)}
-                   className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-gray-900"
-                   placeholder="0.00"
-                />
-              </div>
-
-              <button 
-                onClick={handleSubmit}
-                disabled={!amount || !recipientAccount}
-                className="w-full bg-black text-white py-4 rounded-xl font-bold shadow-lg disabled:opacity-50"
-              >
-                Send Money
-              </button>
-           </div>
-        )}
-
-        {activeTab === 'withdraw' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-               <p className="text-sm text-gray-500">Available to withdraw</p>
-               <p className="text-2xl font-bold text-gray-900">₦ {user.balance.toLocaleString()}</p>
-             </div>
-
-             <div>
-               <label className="block text-sm font-bold text-gray-900 mb-2">Amount</label>
-               <input 
-                  type="number" 
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-gray-900"
-                  placeholder="0.00"
-               />
-             </div>
-
-             <button 
-               onClick={handleSubmit}
-               disabled={!amount}
-               className="w-full bg-black text-white py-4 rounded-xl font-bold shadow-lg disabled:opacity-50"
-             >
-               Request Withdrawal
-             </button>
+          <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
+             <label className="text-[10px] font-black uppercase tracking-widest text-white/30">Recipient Node ID</label>
+             <input 
+               type="text" 
+               value={recipientAccount} 
+               onChange={e => setRecipientAccount(e.target.value)}
+               placeholder="XXXX-XX-XXXX"
+               className="w-full bg-transparent text-xl font-mono tracking-tighter outline-none"
+             />
+             {recipientName && (
+               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-3">
+                 <Shield className="text-emerald-400" size={16} />
+                 <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Verified Target: {recipientName}</p>
+               </motion.div>
+             )}
           </div>
         )}
+
+        <button 
+          onClick={() => setShowConfirm(true)}
+          disabled={!amount || (activeTab === 'transfer' && !recipientName)}
+          className="w-full py-5 bg-[#00F2EA] text-black rounded-[2rem] font-black uppercase tracking-widest shadow-2xl shadow-[#00F2EA]/20 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale"
+        >
+          Review Operation
+        </button>
       </div>
+
+      {/* Transaction History Categorized (Phase 9) */}
+      <section className="mt-12 space-y-6">
+        <div className="flex justify-between items-center px-1">
+          <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Synchronization Feed</h3>
+          <History size={16} className="text-white/20" />
+        </div>
+        <div className="space-y-8">
+          {['Today', 'Yesterday'].map(day => (
+            <div key={day} className="space-y-4">
+              <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/20 ml-2">{day}</p>
+              {history.slice(0, 3).map(tx => (
+                <div key={tx.id} className="p-5 rounded-[2rem] bg-white/[0.02] border border-white/5 flex justify-between items-center group hover:bg-white/[0.04] transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 text-white/30 group-hover:text-[#00F2EA] transition-colors">
+                      <WalletIcon size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-tight">{tx.description}</p>
+                      <p className="text-[9px] text-white/20 font-bold mt-1 uppercase tracking-widest">{tx.status} • {tx.currency}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-black ${tx.type === TransactionType.DEPOSIT ? 'text-[#00F2EA]' : 'text-white'}`}>
+                      {tx.type === TransactionType.DEPOSIT ? '+' : '-'} {tx.amount.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Phase 7 Secure Confirmation */}
+      <Modal isOpen={showConfirm} onClose={() => setShowConfirm(false)} title="Confirm Operation">
+        <div className="space-y-8 bg-[#0F172A] p-6 -m-4">
+          <div className="text-center space-y-2">
+            <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">Total Transaction</p>
+            <h2 className="text-4xl font-black text-[#00F2EA]">{activeWallet.currency} {totalToPay.toLocaleString()}</h2>
+            {activeWallet.currency !== 'NGN' && (
+              <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">~ ₦{(totalToPay * mockStore.getExchangeRate(activeWallet.currency, 'NGN')).toLocaleString()}</p>
+            )}
+          </div>
+
+          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-3">
+             <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-white/40">
+               <span>Platform Fee</span>
+               <span>0.00 %</span>
+             </div>
+             <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-[#00F2EA]">
+               <span>Vault Shield</span>
+               <span>Active</span>
+             </div>
+          </div>
+
+          <div className="bg-indigo-500/10 p-4 rounded-2xl border border-indigo-500/20 flex gap-3 items-start">
+             <Info className="text-indigo-400 shrink-0" size={14} />
+             <p className="text-[9px] font-medium text-indigo-200/60 leading-relaxed uppercase tracking-widest">Funds will be synchronized across nodes immediately. Ensure recipient ID is correct.</p>
+          </div>
+
+          <SlideToConfirm onConfirm={handleConfirmAction} label="Slide to Synchronize" successLabel="Syncing Nodes..." />
+          <button onClick={() => setShowConfirm(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-white/30 py-2">Abort Operation</button>
+        </div>
+      </Modal>
     </div>
   );
 };

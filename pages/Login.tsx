@@ -1,8 +1,9 @@
 
-
-import React, { useState } from 'react';
-import { UserRole } from '../types';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { mockStore } from '../services/mockStore';
+import { UserRole } from '../types';
+import { Fingerprint, ShieldCheck, XCircle, ArrowRight, Loader2, Lock } from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -12,162 +13,274 @@ interface LoginProps {
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
-  
-  const [loginMethod, setLoginMethod] = useState<'PASSWORD' | 'FACE'>('PASSWORD');
-  const [isScanning, setIsScanning] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'IDENTIFY' | 'BIOMETRIC' | 'PIN' | 'STAFF_KEY'>('IDENTIFY');
+  const [isFaceIdEnrolled, setIsFaceIdEnrolled] = useState<boolean | null>(null);
+  const [targetUser, setTargetUser] = useState<any>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (email && email.includes('@')) {
+      const user = mockStore.getAllUsers().find(u => u.email === email);
+      if (user) {
+        setTargetUser(user);
+        setIsFaceIdEnrolled(mockStore.isFaceIdEnrolled(email));
+      } else {
+        setTargetUser(null);
+        setIsFaceIdEnrolled(null);
+      }
+    }
+  }, [email]);
+
+  const handleIdentify = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    if (!email) {
+      setError('Enter credentials');
+      return;
+    }
+    
+    if (!targetUser) {
+      setError('Node not found');
+      return;
+    }
 
-    if (loginMethod === 'FACE') {
-        if (!email) {
-            setError("Please enter your email to identify account.");
-            return;
-        }
-        setIsScanning(true);
-        setTimeout(() => {
-            const result = mockStore.loginWithFace(email);
-            setIsScanning(false);
-            if (result.success) {
-                onLoginSuccess();
-            } else {
-                setError(result.message || "Face verification failed. Try again.");
-            }
-        }, 2500);
+    setError('');
+    const isStaff = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.SUPPORT].includes(targetUser.role);
+    
+    if (isStaff) {
+      setMode('STAFF_KEY');
     } else {
-        const result = mockStore.loginWithCredentials(email, password);
-        if (result.success) {
-            onLoginSuccess();
-        } else {
-            setError(result.message || "Login failed");
-        }
+      setMode(isFaceIdEnrolled ? 'BIOMETRIC' : 'PIN');
     }
   };
 
-  const handleDemoLogin = (role: UserRole) => {
-    mockStore.login(role);
-    onLoginSuccess();
+  const handleStaffLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      const result = mockStore.login(email, password);
+      if (result.success) {
+        onLoginSuccess();
+      } else {
+        setError('Invalid Security Key');
+        setLoading(false);
+      }
+    }, 1200);
   };
 
-  return (
-    <div className="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-64 h-64 bg-blue-50 rounded-full mix-blend-multiply filter blur-3xl opacity-70 -translate-x-1/2 -translate-y-1/2"></div>
-      <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple-50 rounded-full mix-blend-multiply filter blur-3xl opacity-70 translate-x-1/2 translate-y-1/2"></div>
+  const handleBiometricLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      // Simulate WebAuthn handshake
+      setTimeout(() => {
+        const result = mockStore.verifyAuthentication(email, {});
+        if (result.success) {
+          onLoginSuccess();
+        } else {
+          setError("Scan Failed");
+          setLoading(false);
+        }
+      }, 1500);
+    } catch (err) {
+      setMode('PIN');
+      setLoading(false);
+    }
+  };
 
-      <div className="z-10 w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-black text-white mb-4 shadow-xl">
-            <span className="text-3xl">🛡️</span>
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 text-gray-900">POS Wallet</h1>
-          <p className="text-gray-500 font-medium">Secure payments & agent discovery.</p>
-        </div>
+  const handlePinLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin.length < 6) return;
+    setLoading(true);
+    const result = mockStore.loginWithPin(email, pin);
+    if (result.success) {
+      onLoginSuccess();
+    } else {
+      setError('Invalid PIN');
+      setLoading(false);
+    }
+  };
 
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-2xl">
-            <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
-                <button 
-                    onClick={() => { setLoginMethod('PASSWORD'); setError(''); }}
-                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${loginMethod === 'PASSWORD' ? 'bg-white text-black shadow' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    Password
-                </button>
-                <button 
-                    onClick={() => { setLoginMethod('FACE'); setError(''); }}
-                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${loginMethod === 'FACE' ? 'bg-blue-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    Face ID
-                </button>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-4 mb-4">
-                {error && <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg text-sm text-center font-bold">{error}</div>}
-                
-                <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1 ml-1">EMAIL ADDRESS</label>
-                    <input 
-                        type="email" 
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-black focus:bg-white transition-colors"
-                        placeholder="john@example.com"
-                    />
-                </div>
-
-                {loginMethod === 'PASSWORD' && (
-                    <div className="animate-in fade-in slide-in-from-top-2">
-                        <label className="block text-xs font-bold text-gray-700 mb-1 ml-1">PASSWORD</label>
-                        <input 
-                            type="password" 
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-black focus:bg-white transition-colors"
-                            placeholder="••••••••"
-                        />
-                    </div>
-                )}
-
-                {loginMethod === 'FACE' && (
-                     <div className="animate-in fade-in slide-in-from-top-2">
-                        {!isScanning ? (
-                            <div className="bg-gray-50 rounded-xl p-6 text-center border-2 border-dashed border-gray-300 hover:border-blue-500/50 transition-colors">
-                                <div className="text-4xl mb-2">👤</div>
-                                <p className="text-sm text-gray-900 font-bold mb-1">Position your face</p>
-                                <p className="text-[10px] text-gray-500">Ensure good lighting for biometric scan</p>
-                            </div>
-                        ) : (
-                            <div className="bg-white rounded-xl p-6 text-center relative overflow-hidden h-[120px] flex items-center justify-center border border-blue-500 shadow-inner">
-                                <div className="absolute inset-0 bg-blue-50 animate-pulse"></div>
-                                <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-[scan_1.5s_ease-in-out_infinite]"></div>
-                                
-                                <div className="relative z-10">
-                                    <div className="text-4xl mb-2 animate-bounce">😐</div>
-                                    <p className="text-xs text-blue-600 font-mono tracking-widest font-bold">VERIFYING...</p>
-                                </div>
-                            </div>
-                        )}
-                     </div>
-                )}
-
-                <button 
-                    type="submit" 
-                    disabled={isScanning}
-                    className={`w-full py-3 rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98] ${
-                        isScanning 
-                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                        : 'bg-black text-white hover:bg-gray-800 shadow-xl'
-                    }`}
-                >
-                    {isScanning ? 'Processing...' : loginMethod === 'FACE' ? 'Scan Face & Login' : 'Sign In'}
-                </button>
-            </form>
-
-            <div className="text-center">
-                <p className="text-gray-500 text-sm">Don't have an account? <button onClick={onNavigateToRegister} className="text-blue-600 font-bold hover:underline">Sign Up</button></p>
-            </div>
-        </div>
-
-        {/* Demo Section */}
-        <div className="mt-8">
-            <p className="text-[10px] text-gray-400 text-center mb-4 uppercase tracking-widest font-bold">Quick Demo Access</p>
-            <div className="grid grid-cols-4 gap-2">
-                <button onClick={() => handleDemoLogin(UserRole.USER)} className="bg-white p-2 rounded-lg text-xs font-bold hover:bg-gray-50 border border-gray-200 shadow-sm text-gray-700">
-                    User
-                </button>
-                <button onClick={() => handleDemoLogin(UserRole.AGENT)} className="bg-purple-50 p-2 rounded-lg text-xs font-bold hover:bg-purple-100 border border-purple-100 text-purple-700">
-                    Agent
-                </button>
-                <button onClick={() => handleDemoLogin(UserRole.ADMIN)} className="bg-red-50 p-2 rounded-lg text-xs font-bold hover:bg-red-100 border border-red-100 text-red-700">
-                    Admin
-                </button>
-                <button onClick={() => handleDemoLogin(UserRole.SUPPORT)} className="bg-blue-50 p-2 rounded-lg text-xs font-bold hover:bg-blue-100 border border-blue-100 text-blue-700">
-                    Support
-                </button>
-            </div>
+  const renderIdentify = () => (
+    <motion.form 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      onSubmit={handleIdentify}
+      className="space-y-6 w-full"
+    >
+      <div className="space-y-2">
+        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Identity Access</label>
+        <div className="relative">
+          <input 
+            type="email" 
+            value={email} 
+            onChange={e => setEmail(e.target.value)} 
+            className="w-full bg-[#111] border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-[#10B981] outline-none transition-all placeholder:text-gray-600 font-medium" 
+            placeholder="node@payna.io"
+          />
         </div>
       </div>
+      <button 
+        type="submit" 
+        className="w-full bg-[#10B981] text-black font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+      >
+        Verify Identity <ArrowRight size={18} />
+      </button>
+      <p className="text-center text-xs text-gray-500 font-medium">
+        New node? <button type="button" onClick={onNavigateToRegister} className="text-[#10B981] font-bold">Register</button>
+      </p>
+    </motion.form>
+  );
+
+  const renderStaffKey = () => (
+    <motion.form 
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      onSubmit={handleStaffLogin}
+      className="space-y-6 w-full"
+    >
+      <div className="flex flex-col items-center mb-6">
+        <div className="w-16 h-16 bg-[#10B981] text-black rounded-2xl flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+          <Lock size={32} />
+        </div>
+        <p className="text-[10px] font-black text-[#10B981] uppercase tracking-[0.3em]">Staff Kernel Access</p>
+      </div>
+      <div className="space-y-2">
+        <label className="text-[10px] font-black uppercase text-white/20 tracking-widest ml-1">Kernel Password</label>
+        <input 
+          type="password" 
+          value={password} 
+          onChange={e => setPassword(e.target.value)}
+          className="w-full bg-[#111] border border-white/10 p-5 rounded-2xl outline-none focus:border-[#10B981] transition-all" 
+          placeholder="••••••••"
+        />
+      </div>
+      <button 
+        disabled={loading}
+        className="w-full bg-[#10B981] text-black p-5 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#10B981]/20"
+      >
+        {loading ? <Loader2 className="animate-spin" size={20} /> : "Initialize Synchronization"}
+      </button>
+      <button type="button" onClick={() => setMode('IDENTIFY')} className="w-full text-xs text-gray-500 font-bold hover:text-white transition-colors">Abort</button>
+    </motion.form>
+  );
+
+  const renderBiometric = () => (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="flex flex-col items-center space-y-10 w-full"
+    >
+      <div className="text-center">
+        <h2 className="text-xl font-black mb-2 uppercase">Vault Secure Access</h2>
+        <p className="text-[10px] text-gray-400 font-black tracking-widest uppercase">Node synchronization...</p>
+      </div>
+
+      <div className="relative flex items-center justify-center">
+        <motion.div animate={{ rotate: 360 }} transition={{ duration: 8, repeat: Infinity, ease: "linear" }} className="absolute w-48 h-48 border border-white/5 rounded-full" />
+        <motion.div animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 2, repeat: Infinity }} className="absolute w-32 h-32 bg-[#10B981]/10 rounded-full blur-2xl" />
+        <button 
+          onClick={handleBiometricLogin}
+          disabled={loading}
+          className="relative z-10 w-28 h-28 bg-[#10B981] text-black rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={40} className="animate-spin" /> : <Fingerprint size={48} strokeWidth={1.5} />}
+        </button>
+        <div className="absolute w-32 h-[2px] bg-[#10B981] shadow-[0_0_15px_#10B981] animate-scan-line pointer-events-none" />
+      </div>
+
+      <div className="space-y-4 w-full">
+        <button onClick={() => setMode('PIN')} className="w-full py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border border-white/5 rounded-2xl hover:bg-white/5 transition-all">
+          PIN Fallback
+        </button>
+        <button onClick={() => setMode('IDENTIFY')} className="w-full text-xs text-gray-500 font-bold hover:text-white transition-colors">Switch Account</button>
+      </div>
+    </motion.div>
+  );
+
+  const renderPin = () => (
+    <motion.form 
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      onSubmit={handlePinLogin}
+      className="space-y-8 w-full"
+    >
+      <div className="text-center">
+        <h2 className="text-xl font-black mb-2 uppercase tracking-tight">Security PIN</h2>
+        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Enter node access code</p>
+      </div>
+
+      <div className="flex justify-center gap-3">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className={`w-10 h-14 rounded-xl border flex items-center justify-center text-xl font-black transition-all ${pin.length > i ? 'border-[#10B981] text-[#10B981] bg-[#10B981]/10' : 'border-white/10 bg-[#111]'}`}>
+            {pin.length > i ? '•' : ''}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 max-w-[280px] mx-auto">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, '⌫'].map((k, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => {
+              if (k === 'C') setPin('');
+              else if (k === '⌫') setPin(p => p.slice(0, -1));
+              else if (pin.length < 6) setPin(p => p + k);
+            }}
+            className="h-14 w-full rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-lg font-bold hover:bg-white/10 active:scale-90 transition-all"
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        <button 
+          type="submit"
+          disabled={pin.length < 6 || loading}
+          className="w-full bg-[#10B981] text-black font-black py-4 rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+        >
+          {loading ? 'Decrypting...' : 'Access Vault'}
+        </button>
+        <button type="button" onClick={() => setMode('IDENTIFY')} className="w-full text-xs text-gray-500 font-bold hover:text-white transition-colors">Cancel</button>
+      </div>
+    </motion.form>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8 relative overflow-hidden text-white">
+      <div className="absolute top-[-10%] right-[-10%] w-[50%] aspect-square bg-[#10B981]/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[50%] aspect-square bg-[#5D5FEF]/10 rounded-full blur-[100px] pointer-events-none" />
+      
+      <div className="z-10 w-full max-w-sm flex flex-col items-center">
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-12 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-gradient-to-tr from-[#10B981] to-[#5D5FEF] text-black mb-6 shadow-[0_20px_50px_rgba(16,185,129,0.3)] rotate-12">
+            <ShieldCheck size={44} strokeWidth={2.5} />
+          </div>
+          <h1 className="text-5xl font-black tracking-tighter mb-1">PAYNA</h1>
+          <p className="text-[10px] text-[#10B981] font-black uppercase tracking-[0.4em]">Vault Core</p>
+        </motion.div>
+
+        <AnimatePresence>
+          {error && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 rounded-2xl flex items-center gap-3 mb-6">
+              <XCircle size={18} />
+              <p className="text-[10px] font-black uppercase tracking-tight">{error}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {mode === 'IDENTIFY' && renderIdentify()}
+        {mode === 'STAFF_KEY' && renderStaffKey()}
+        {mode === 'BIOMETRIC' && renderBiometric()}
+        {mode === 'PIN' && renderPin()}
+      </div>
+
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.3 }} className="absolute bottom-8 text-[8px] font-black uppercase tracking-[1em] text-white/50">
+        Secure Synchronization Architecture v1.1
+      </motion.div>
     </div>
   );
 };

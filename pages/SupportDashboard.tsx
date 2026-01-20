@@ -1,130 +1,132 @@
 
-
-import React, { useState, useEffect } from 'react';
-import { ChatSession, ChatMessage } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { SupportTicket, ChatMessage, UserRole, User } from '../types';
 import { mockStore } from '../services/mockStore';
+import { MessageSquare, Send, CheckCircle, User as UserIcon, Shield, Search } from 'lucide-react';
 
-interface SupportDashboardProps {
-  onLogout: () => void;
-}
+export const SupportDashboard: React.FC = () => {
+  const [tickets, setTickets] = useState<SupportTicket[]>(mockStore.getTickets('ALL'));
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [reply, setReply] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const admin = mockStore.getCurrentUser();
 
-export const SupportDashboard: React.FC<SupportDashboardProps> = ({ onLogout }) => {
-  const [sessions, setSessions] = useState<ChatSession[]>(mockStore.getAllChatSessions());
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
+  const activeTicket = tickets.find(t => t.id === activeTicketId);
+  const ticketUser = mockStore.getAllUsers().find(u => u.id === activeTicket?.userId);
 
-  // Refresh chats periodically
   useEffect(() => {
-      const interval = setInterval(() => {
-          setSessions(mockStore.getAllChatSessions());
-          // If active session, refresh messages
-          if (activeSessionId) {
-             // In mock store, getting all sessions refreshes the data reference
-          }
-      }, 3000);
-      return () => clearInterval(interval);
-  }, [activeSessionId]);
+    const unsub = mockStore.subscribe((ev) => {
+      if (ev.type === 'TICKET_NEW' || ev.type === 'TICKET_UPDATE') {
+        setTickets(mockStore.getTickets('ALL'));
+      }
+    });
+    return unsub;
+  }, []);
 
-  const activeSession = sessions.find(s => s.userId === activeSessionId);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeTicket?.messages]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!replyText.trim() || !activeSessionId) return;
-      
-      mockStore.sendChatMessage(activeSessionId, replyText, true);
-      setReplyText('');
-      setSessions(mockStore.getAllChatSessions());
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reply.trim() || !activeTicketId) return;
+    mockStore.sendTicketMessage(activeTicketId, admin!.id, reply, true);
+    setReply('');
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row h-screen overflow-hidden text-gray-900">
-      {/* Sidebar List */}
-      <div className={`w-full md:w-1/3 bg-white border-r border-gray-200 flex flex-col ${activeSessionId ? 'hidden md:flex' : 'flex'}`}>
-         <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-             <h2 className="font-bold text-lg text-gray-900">Support Chats</h2>
-             <button onClick={onLogout} className="text-xs text-red-600 font-bold hover:underline">Log Out</button>
+    <div className="flex h-screen bg-[#050505] text-white overflow-hidden">
+      {/* Sidebar: Ticket Stream */}
+      <aside className="w-96 bg-[#0A0A0A] border-r border-white/5 flex flex-col">
+         <div className="p-8 border-b border-white/5">
+            <h2 className="text-2xl font-black tracking-tighter mb-1">Support Portal</h2>
+            <p className="text-[10px] font-black text-[#10B981] uppercase tracking-[0.2em]">Active Live Streams</p>
          </div>
          
-         <div className="flex-1 overflow-y-auto">
-             {sessions.length === 0 && (
-                 <p className="text-center text-gray-400 p-8 text-sm">No active chats.</p>
-             )}
-             {sessions.map(session => (
-                 <button 
-                    key={session.userId}
-                    onClick={() => setActiveSessionId(session.userId)}
-                    className={`w-full p-4 flex items-center gap-3 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${activeSessionId === session.userId ? 'bg-blue-50' : ''}`}
-                 >
-                     <img src={session.avatarUrl || 'https://via.placeholder.com/40'} className="w-10 h-10 rounded-full bg-gray-200" alt="User" />
-                     <div className="flex-1 min-w-0">
-                         <div className="flex justify-between items-baseline mb-1">
-                             <p className="font-bold text-sm text-gray-900 truncate">{session.userName}</p>
-                             <span className="text-[10px] text-gray-500">{new Date(session.lastMessageAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                         </div>
-                         <p className="text-xs text-gray-500 truncate">
-                             {session.messages[session.messages.length - 1]?.text}
-                         </p>
-                     </div>
-                     {session.unreadCount > 0 && (
-                         <span className="w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
-                             {session.unreadCount}
-                         </span>
-                     )}
-                 </button>
-             ))}
+         <div className="p-4">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={14} />
+              <input className="w-full bg-white/5 border border-white/10 p-3 pl-10 rounded-xl text-xs outline-none" placeholder="Search Tickets / IDs..." />
+            </div>
          </div>
-      </div>
 
-      {/* Chat Window */}
-      <div className={`flex-1 flex flex-col bg-gray-100 ${!activeSessionId ? 'hidden md:flex' : 'flex'}`}>
-         {activeSession ? (
-             <>
-                <div className="p-4 bg-white border-b border-gray-200 flex items-center gap-3 shadow-sm">
-                    <button onClick={() => setActiveSessionId(null)} className="md:hidden text-gray-500 pr-2">←</button>
-                    <img src={activeSession.avatarUrl || 'https://via.placeholder.com/40'} className="w-10 h-10 rounded-full bg-gray-200" alt="User" />
-                    <div>
-                        <p className="font-bold text-gray-900">{activeSession.userName}</p>
-                        <p className="text-xs text-green-600 font-bold">● Active Now</p>
+         <div className="flex-1 overflow-y-auto no-scrollbar">
+            {tickets.map(ticket => (
+               <button 
+                 key={ticket.id}
+                 onClick={() => setActiveTicketId(ticket.id)}
+                 className={`w-full p-6 text-left border-b border-white/5 transition-all hover:bg-white/[0.02] ${activeTicketId === ticket.id ? 'bg-[#10B981]/5 border-l-4 border-l-[#10B981]' : ''}`}
+               >
+                  <div className="flex justify-between items-start mb-2">
+                     <p className={`text-[10px] font-black uppercase tracking-widest ${ticket.status === 'OPEN' ? 'text-orange-500' : 'text-[#10B981]'}`}>{ticket.status}</p>
+                     <span className="text-[9px] text-white/20 font-bold">{new Date(ticket.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <h4 className="font-black text-sm uppercase tracking-tight mb-1 truncate">{ticket.subject}</h4>
+                  <p className="text-xs text-white/40 truncate">{ticket.messages[ticket.messages.length-1].text}</p>
+               </button>
+            ))}
+         </div>
+      </aside>
+
+      {/* Main: Chat View */}
+      <main className="flex-1 flex flex-col relative">
+         {activeTicket ? (
+            <>
+               <header className="p-6 border-b border-white/5 bg-[#0A0A0A]/50 flex justify-between items-center z-10">
+                  <div className="flex items-center gap-4">
+                     <div className="w-12 h-12 bg-[#10B981]/10 rounded-2xl flex items-center justify-center text-[#10B981]">
+                        <UserIcon size={24} />
+                     </div>
+                     <div>
+                        <h3 className="text-lg font-black tracking-tighter uppercase">{ticketUser?.name}</h3>
+                        <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">ID: {ticketUser?.walletNumber}</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3">
+                     <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase text-white/40">LVL {ticketUser?.kycLevel} USER</div>
+                     <button className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-[10px] font-black uppercase text-red-500 hover:bg-red-500/20 transition-all">Flag Node</button>
+                  </div>
+               </header>
+
+               <div className="flex-1 overflow-y-auto p-12 space-y-6 no-scrollbar pb-32">
+                  {activeTicket.messages.map((m, idx) => (
+                    <div key={m.id} className={`flex ${m.isAdmin ? 'justify-end' : 'justify-start'}`}>
+                       <div className={`max-w-xl p-6 rounded-[2rem] shadow-xl ${m.isAdmin ? 'bg-[#10B981] text-black rounded-tr-none' : 'bg-[#0A0A0A] border border-white/5 text-white rounded-tl-none'}`}>
+                          <p className="text-sm leading-relaxed font-medium">{m.text}</p>
+                          <p className={`text-[9px] mt-2 font-black uppercase opacity-40 ${m.isAdmin ? 'text-black' : 'text-white'}`}>
+                            {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                       </div>
                     </div>
-                </div>
+                  ))}
+                  <div ref={chatEndRef} />
+               </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {activeSession.messages.map(msg => (
-                        <div key={msg.id} className={`flex ${msg.isSupport ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm text-sm ${
-                                msg.isSupport 
-                                ? 'bg-blue-600 text-white rounded-tr-none' 
-                                : 'bg-white text-gray-900 rounded-tl-none'
-                            }`}>
-                                <p>{msg.text}</p>
-                                <p className={`text-[10px] mt-1 text-right ${msg.isSupport ? 'text-blue-200' : 'text-gray-400'}`}>
-                                    {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                </p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-200 flex gap-2">
-                    <input 
-                       type="text" 
-                       value={replyText}
-                       onChange={(e) => setReplyText(e.target.value)}
-                       placeholder="Type a message..."
-                       className="flex-1 p-3 bg-gray-100 rounded-full border border-gray-200 focus:outline-none focus:border-blue-500 text-gray-900"
-                    />
-                    <button type="submit" className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow hover:bg-blue-700">
-                        ➤
-                    </button>
-                </form>
-             </>
+               <footer className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#050505] to-transparent">
+                  <form onSubmit={handleSend} className="relative max-w-4xl mx-auto">
+                     <input 
+                       className="w-full bg-[#0A0A0A] border border-white/10 p-6 pr-24 rounded-[2rem] outline-none focus:border-[#10B981] transition-all font-medium shadow-2xl" 
+                       placeholder="Deploy assistance response..." 
+                       value={reply}
+                       onChange={e => setReply(e.target.value)}
+                     />
+                     <button 
+                       type="submit"
+                       className="absolute right-3 top-1/2 -translate-y-1/2 bg-[#10B981] text-black w-12 h-12 rounded-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-[#10B981]/20"
+                     >
+                        <Send size={20} />
+                     </button>
+                  </form>
+               </footer>
+            </>
          ) : (
-             <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                 <span className="text-6xl mb-4">💬</span>
-                 <p className="text-sm">Select a chat to start messaging</p>
-             </div>
+            <div className="flex-1 flex flex-col items-center justify-center text-white/5">
+               <Shield size={160} strokeWidth={1} className="opacity-10" />
+               <p className="text-sm font-black uppercase tracking-[1.5em] mt-8 text-white/20">Select Secure Stream</p>
+            </div>
          )}
-      </div>
+      </main>
     </div>
   );
 };
