@@ -2,8 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIInsight, Transaction, User } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export interface AnalysisResult {
   suggestedAmount: number;
   confidence: number;
@@ -21,6 +19,8 @@ export const getGlobalAIInsights = async (user: User, transactions: Transaction[
     const summary = transactions.slice(0, 10).map(t => `${t.type}: ${t.currency} ${t.amount} on ${t.date}`).join('\n');
     const walletSummary = user.wallets.map(w => `${w.currency}: ${w.balance}`).join(', ');
     
+    // Instantiate a new GoogleGenAI client with the current API key
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: `Analyze this user's multi-currency transaction history and current wallet holdings. 
@@ -76,6 +76,8 @@ export const analyzeReceipt = async (file: File): Promise<AnalysisResult> => {
 
   try {
     const base64Data = await fileToBase64(file);
+    // Instantiate a new GoogleGenAI client with the current API key
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {

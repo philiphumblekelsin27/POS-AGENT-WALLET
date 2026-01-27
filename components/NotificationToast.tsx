@@ -1,6 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Notification } from '../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShieldCheck, XCircle, Zap, Info, Bell } from 'lucide-react';
 
 interface NotificationToastProps {
     notification: Notification | null;
@@ -8,48 +10,39 @@ interface NotificationToastProps {
 }
 
 export const NotificationToast: React.FC<NotificationToastProps> = ({ notification, onClose }) => {
-    const [visible, setVisible] = useState(false);
-
     useEffect(() => {
         if (notification) {
-            setVisible(true);
-            const timer = setTimeout(() => {
-                setVisible(false);
-                setTimeout(onClose, 300);
-            }, 4000);
+            const timer = setTimeout(onClose, 5000);
             return () => clearTimeout(timer);
         }
     }, [notification, onClose]);
 
-    if (!notification && !visible) return null;
+    if (!notification) return null;
 
-    let bgColor = 'bg-gray-800';
-    let icon = 'ℹ️';
+    const themes = {
+        SUCCESS: { bg: 'bg-[#3DF2C4] text-black', icon: <ShieldCheck size={20} /> },
+        ERROR: { bg: 'bg-[#E5484D] text-white', icon: <XCircle size={20} /> },
+        LIVE: { bg: 'bg-[#7C6CFF] text-white', icon: <Zap size={20} /> },
+        INFO: { bg: 'bg-[#1C2230] text-white border border-white/10', icon: <Bell size={20} /> }
+    };
 
-    if (notification?.type === 'SUCCESS') {
-        bgColor = 'bg-[#009688]';
-        icon = '✅';
-    } else if (notification?.type === 'ERROR') {
-        bgColor = 'bg-red-600';
-        icon = '⚠️';
-    } else if (notification?.type === 'LIVE') {
-        bgColor = 'bg-[#D4AF37]'; // Gold for real-time events
-        icon = '⚡';
-    } else if (notification?.type === 'INFO') {
-        bgColor = 'bg-[#1A1A1A]';
-        icon = '🔔';
-    }
+    const theme = themes[notification.type] || themes.INFO;
 
     return (
-        <div className={`fixed top-4 right-4 z-[100] transition-all duration-300 transform ${visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}>
-            <div className={`${bgColor} text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] border border-white/10 ${notification?.type === 'LIVE' ? 'text-[#1A1A1A] font-bold' : ''}`}>
-                <span className="text-xl">{icon}</span>
+        <AnimatePresence>
+            <motion.div 
+                initial={{ x: 100, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 100, opacity: 0 }}
+                className={`fixed top-10 right-10 z-[100] ${theme.bg} px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 min-w-[320px]`}
+            >
+                <div className="shrink-0">{theme.icon}</div>
                 <div className="flex-1">
-                    <p className="font-bold text-[10px] uppercase tracking-widest opacity-80">{notification?.type}</p>
-                    <p className="text-sm font-medium">{notification?.message}</p>
+                    <p className="text-[8px] font-black uppercase tracking-widest opacity-50 mb-1">{notification.type}</p>
+                    <p className="text-xs font-black uppercase tracking-tight leading-tight">{notification.message}</p>
                 </div>
-                <button onClick={() => setVisible(false)} className="opacity-50 hover:opacity-100">✕</button>
-            </div>
-        </div>
+                <button onClick={onClose} className="opacity-30 hover:opacity-100 transition-opacity">✕</button>
+            </motion.div>
+        </AnimatePresence>
     );
 };

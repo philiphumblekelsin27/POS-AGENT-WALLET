@@ -34,12 +34,20 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ onLoginSuccess, onCancel
   const handleBiometric = async () => {
     setLoading(true);
     // Real WebAuthn simulation
-    setTimeout(() => {
-      const result = mockStore.login(email, password);
-      if (result.success) onLoginSuccess();
-      else setError('Biometric Verification Failed');
+    // Fix: Await the login promise
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await mockStore.login(email, password);
+      if (result.success) {
+        onLoginSuccess();
+      } else {
+        setError('Biometric Verification Failed');
+      }
+    } catch (e) {
+      setError('System Error during Verification');
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
   return (

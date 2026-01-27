@@ -13,7 +13,8 @@ export enum UserStatus {
   PENDING_SETUP = 'PENDING_SETUP', 
   PENDING_APPROVAL = 'PENDING_APPROVAL', 
   SUSPENDED = 'SUSPENDED',
-  REJECTED = 'REJECTED'
+  REJECTED = 'REJECTED',
+  DEACTIVATED = 'DEACTIVATED'
 }
 
 export enum VerificationStatus {
@@ -21,6 +22,12 @@ export enum VerificationStatus {
   PENDING = 'PENDING',
   VERIFIED = 'VERIFIED',
   REJECTED = 'REJECTED'
+}
+
+export enum WalletStatus {
+  ACTIVE = 'ACTIVE',
+  FROZEN = 'FROZEN',
+  CLOSED = 'CLOSED'
 }
 
 export enum TransactionStatus {
@@ -31,7 +38,8 @@ export enum TransactionStatus {
   FLAGGED = 'FLAGGED',
   RELEASED = 'RELEASED',
   REFUNDED = 'REFUNDED',
-  DISPUTED = 'DISPUTED'
+  DISPUTED = 'DISPUTED',
+  REJECTED = 'REJECTED'
 }
 
 export enum TransactionType {
@@ -43,26 +51,67 @@ export enum TransactionType {
   SYSTEM_ADJUSTMENT = 'SYSTEM_ADJUSTMENT'
 }
 
-export interface LatLng {
-  lat: number;
-  lng: number;
-}
-
 export enum AgentCategory {
   POS = 'POS',
   DRIVER = 'DRIVER',
   HOTEL = 'HOTEL',
-  BARBER = 'BARBER',
-  DELIVERY = 'DELIVERY',
-  ELECTRICIAN = 'ELECTRICIAN',
-  OTHER = 'OTHER'
+  BARBER = 'BARBER'
 }
 
-export interface MultiCurrencyWallet {
+// NEW: Task Management Types
+export enum TaskPriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH'
+}
+
+export enum TaskStatus {
+  TODO = 'TODO',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED'
+}
+
+export interface Task {
   id: string;
-  currency: string; 
-  balance: number;
-  isDefault: boolean;
+  userId: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  createdAt: string;
+}
+
+export interface AIInsight {
+  type: 'ADVICE' | 'ALERT' | 'OPPORTUNITY';
+  message: string;
+  actionLabel?: string;
+  actionTarget?: string;
+}
+
+export enum LoanTier {
+  BRONZE = 'BRONZE',
+  SILVER = 'SILVER',
+  GOLD = 'GOLD'
+}
+
+export interface Loan {
+  id: string;
+  userId: string;
+  amount: number;
+  totalRepayment: number;
+  dueDate: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID';
+  tier: LoanTier;
+}
+
+export interface AdminBankAccount {
+  id: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  currency: string;
+  isActive: boolean;
 }
 
 export interface User {
@@ -74,7 +123,7 @@ export interface User {
   email: string;
   password?: string; 
   pin?: string; 
-  walletNumber: string; // 6-digit ID
+  walletNumber: string; 
   accountNumber: string; 
   phone?: string;
   role: UserRole;
@@ -86,28 +135,23 @@ export interface User {
   avatarUrl?: string;
   verificationStatus?: VerificationStatus;
   createdAt: string;
-  
-  // Professional Update Fields
   referralCode: string;
   referredBy?: string;
   totalSpent: number;
   totalEarned: number;
   rating: number;
   reviewCount: number;
-  businessAddress?: string;
-  businessPhoto?: string;
-  
-  // Financial Prefs
-  privacyMode?: boolean;
-  externalBank?: {
-    bankName: string;
-    accountNumber: string;
-    accountName: string;
-  };
-
   limits?: {
     dailyLimit: number;
   };
+  privacyMode?: boolean;
+}
+
+export interface MultiCurrencyWallet {
+  id: string;
+  currency: string; 
+  balance: number;
+  isDefault: boolean;
 }
 
 export interface Transaction {
@@ -116,15 +160,15 @@ export interface Transaction {
   type: TransactionType;
   amount: number;
   currency: string;
-  toCurrency?: string; 
   date: string; 
   status: TransactionStatus;
   description: string;
   recipientId?: string;
   recipientName?: string;
-  isEscrow?: boolean;
-  serviceType?: AgentCategory;
+  recipientAccount?: string;
   referenceNumber?: string;
+  evidenceUrl?: string;
+  serviceType?: string;
 }
 
 export interface SystemLog {
@@ -150,10 +194,10 @@ export interface MarketData {
 
 export interface ChatMessage {
   id: string;
-  senderId: string;
   text: string;
   timestamp: string;
-  isAdmin: boolean;
+  isAdmin?: boolean;
+  isSupport?: boolean;
 }
 
 export interface SupportTicket {
@@ -167,11 +211,9 @@ export interface SupportTicket {
   updatedAt: string;
 }
 
-export interface AIInsight {
-  type: 'ADVICE' | 'ALERT' | 'OPPORTUNITY';
-  message: string;
-  actionLabel?: string;
-  actionTarget?: string;
+export interface ChatSession {
+  userId: string;
+  messages: ChatMessage[];
 }
 
 export interface Agent {
@@ -181,15 +223,11 @@ export interface Agent {
   category: AgentCategory;
   avatarUrl: string;
   rating: number;
-  ratingCount: number;
   isOnline: boolean;
-  location?: LatLng;
   basePrice: number;
-  verificationStatus: VerificationStatus;
+  location?: { lat: number, lng: number };
   phone?: string;
-  description?: string;
-  operatingHours?: string;
-  travelRadius?: number; // in km
+  verificationStatus?: VerificationStatus;
 }
 
 export interface Ad {
@@ -198,47 +236,9 @@ export interface Ad {
   color?: string;
 }
 
-export enum WalletStatus {
-  ACTIVE = 'ACTIVE',
-  FROZEN = 'FROZEN',
-  MAINTENANCE = 'MAINTENANCE'
-}
-
-export interface WealthInsight {
-  category: string;
-  percentage: number;
-  trend: 'UP' | 'DOWN';
-  message: string;
-}
-
 export interface Notification {
   id: string;
   message: string;
   type: 'SUCCESS' | 'ERROR' | 'INFO' | 'LIVE';
   timestamp: string;
-}
-
-export enum LoanTier {
-  BRONZE = 'BRONZE',
-  SILVER = 'SILVER',
-  GOLD = 'GOLD'
-}
-
-export interface Loan {
-  id: string;
-  userId: string;
-  amount: number;
-  totalRepayment: number;
-  dueDate: string;
-  status: 'PENDING' | 'APPROVED' | 'REPAID' | 'DEFAULTED';
-  tier: LoanTier;
-}
-
-export interface ChatSession {
-    messages: {
-        id: string;
-        text: string;
-        timestamp: string;
-        isSupport: boolean;
-    }[];
 }

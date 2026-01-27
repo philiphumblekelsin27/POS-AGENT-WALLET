@@ -1,384 +1,401 @@
 
 import { 
   User, UserRole, UserStatus, VerificationStatus, Transaction, 
-  Agent, AgentCategory, TransactionStatus, TransactionType,
-  MarketData, SupportTicket, SystemLog, RealTimeEvent, ChatSession
+  Agent, TransactionStatus, TransactionType, AdminBankAccount,
+  SystemLog, RealTimeEvent, MarketData, Ad, AgentCategory,
+  SupportTicket, ChatSession, ChatMessage, Task, TaskStatus, TaskPriority,
+  Notification
 } from '../types';
 import { SecureStorage } from '../utils/storage';
-import { generateAccountNumber } from '../utils/accountGenerator';
 
+const hashValue = (val: string) => {
+  if (!val) return "";
+  return btoa(`PAYNA_NODE_SALT_2025_#_X_${val}_@_CORE_PROTECT`);
+};
+
+const MASTER_PWD = hashValue('chibuchim@27');
 const DEFAULT_USERS: Record<string, User> = {
-  'user_123': {
-    id: 'user_123',
-    username: 'johndoe',
-    name: 'John Doe',
-    displayName: 'Johnny D',
-    bio: 'Tech enthusiast and frequent traveler.',
-    email: 'john@example.com',
-    password: 'password',
-    pin: '123456',
-    walletNumber: '112233', 
-    accountNumber: generateAccountNumber('08000000000'),
-    role: UserRole.USER,
-    status: UserStatus.ACTIVE,
-    balance: 55400.00,
-    preferredCurrency: 'NGN',
-    wallets: [{ id: 'w1', currency: 'NGN', balance: 55400.00, isDefault: true }],
-    kycLevel: 2,
-    avatarUrl: 'https://ui-avatars.com/api/?name=John+Doe&background=1E293B&color=fff',
-    verificationStatus: VerificationStatus.VERIFIED,
-    createdAt: new Date().toISOString(),
-    referralCode: 'PAYNA-123',
-    totalSpent: 124500,
-    totalEarned: 0,
-    rating: 5.0,
-    reviewCount: 0,
-    privacyMode: false,
-    limits: { dailyLimit: 500000 }
-  },
-  'super_admin': {
-    id: 'super_admin',
-    username: 'godmode',
-    name: 'Thomas Kwofie',
-    email: 'admin@payna.io',
-    password: 'password',
-    walletNumber: '000000',
-    accountNumber: generateAccountNumber('00000000000'),
+  'philip@payna.io': {
+    id: 'philip_god',
+    username: 'philip_god',
+    name: 'Philip Humble',
+    email: 'philip@payna.io',
+    password: MASTER_PWD,
+    pin: hashValue('0000'),
+    walletNumber: '777001',
+    accountNumber: '1112223334',
     role: UserRole.SUPER_ADMIN,
     status: UserStatus.ACTIVE,
-    balance: 10000000,
+    balance: 50000000,
     preferredCurrency: 'NGN',
-    wallets: [{ id: 'w_master', currency: 'NGN', balance: 10000000, isDefault: true }],
+    wallets: [
+      { id: 'w_philip_ngn', currency: 'NGN', balance: 50000000, isDefault: true },
+      { id: 'w_philip_usd', currency: 'USD', balance: 12500, isDefault: false },
+      { id: 'w_philip_eur', currency: 'EUR', balance: 5000, isDefault: false }
+    ],
     kycLevel: 3,
     verificationStatus: VerificationStatus.VERIFIED,
     createdAt: new Date().toISOString(),
-    avatarUrl: 'https://ui-avatars.com/api/?name=Thomas+Kwofie&background=10B981&color=fff',
-    referralCode: 'ADMIN-001',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Philip+God&background=3DF2C4&color=000',
+    referralCode: 'GOD-MODE-1',
     totalSpent: 0,
     totalEarned: 0,
     rating: 5.0,
-    reviewCount: 100
+    reviewCount: 999
   }
 };
 
-const DEFAULT_AGENTS: Agent[] = [
-  {
-    id: 'agent_1',
-    userId: 'u_agent_1',
-    businessName: 'Lagos Fast-Cash POS',
-    category: AgentCategory.POS,
-    avatarUrl: 'https://ui-avatars.com/api/?name=POS+Lagos&background=10B981&color=fff',
-    rating: 4.8,
-    ratingCount: 156,
-    isOnline: true,
-    basePrice: 100,
-    verificationStatus: VerificationStatus.VERIFIED,
-    location: { lat: 6.5244, lng: 3.3792 },
-    phone: '+2348012345678',
-    description: 'Instant cash withdrawals and deposits. Open 24/7.',
-    operatingHours: '9:00 AM - 9:00 PM',
-    travelRadius: 5
-  }
-];
-
 class MockStore {
   private users: Record<string, User>;
-  private agents: Agent[];
   private transactions: Transaction[];
   private currentUser: User | null = null;
+  private adminBankAccounts: AdminBankAccount[];
   private logs: SystemLog[] = [];
   private listeners: Set<(event: RealTimeEvent) => void> = new Set();
-  private supportTickets: SupportTicket[];
+  private agents: Agent[];
+  private markets: MarketData[];
+  private ads: Ad[];
+  private tickets: SupportTicket[];
+  private chatSessions: Record<string, ChatSession> = {};
+  private tasks: Task[] = [];
+  private notifications: Notification[] = [];
 
   constructor() {
     this.users = SecureStorage.getItem('users', DEFAULT_USERS);
-    this.agents = SecureStorage.getItem('agents', DEFAULT_AGENTS);
     this.transactions = SecureStorage.getItem('transactions', []);
-    this.logs = SecureStorage.getItem('system_logs', [
-      { id: 'l1', event: 'Vault Kernel Initialized', user: 'SYSTEM', timestamp: new Date().toISOString() }
+    this.adminBankAccounts = SecureStorage.getItem('admin_banks', [
+      { id: 'b1', bankName: 'Zenith Bank', accountName: 'PAYNA TECHNOLOGY LTD', accountNumber: '1234567890', currency: 'NGN', isActive: true },
+      { id: 'b2', bankName: 'Kuda Bank', accountName: 'PAYNA GLOBAL POOL', accountNumber: '0987654321', currency: 'NGN', isActive: true }
     ]);
-    this.supportTickets = SecureStorage.getItem('support_tickets', []);
-  }
-
-  subscribe(callback: (event: RealTimeEvent) => void) {
-    this.listeners.add(callback);
-    return () => this.listeners.delete(callback);
-  }
-
-  private emit(type: string, payload: any) {
-    const event: RealTimeEvent = { type, payload, timestamp: new Date().toISOString() };
-    this.listeners.forEach(cb => cb(event));
+    this.logs = SecureStorage.getItem('system_logs', []);
+    this.agents = SecureStorage.getItem('agents', []);
+    this.markets = SecureStorage.getItem('markets', [
+      { currency: 'USD/NGN', price: 1550, change24h: 1.2, trend: 'UP', lastUpdated: new Date().toISOString() },
+      { currency: 'GBP/NGN', price: 1950, change24h: 0.8, trend: 'UP', lastUpdated: new Date().toISOString() },
+      { currency: 'EUR/NGN', price: 1680, change24h: -0.5, trend: 'DOWN', lastUpdated: new Date().toISOString() },
+      { currency: 'BTC/NGN', price: 95000000, change24h: -2.5, trend: 'DOWN', lastUpdated: new Date().toISOString() }
+    ]);
+    this.ads = SecureStorage.getItem('ads', [{ id: 'ad1', text: 'Multi-Currency Oracle is now LIVE.', color: 'bg-[#3DF2C4]' }]);
+    this.tickets = SecureStorage.getItem('support_tickets', []);
+    this.chatSessions = SecureStorage.getItem('chat_sessions', {});
+    this.tasks = SecureStorage.getItem('tasks', []);
+    
+    const session = SecureStorage.getItem('auth_session', null);
+    if (session && this.users[session.userId]) {
+      this.currentUser = this.users[session.userId];
+    }
   }
 
   private save() {
     SecureStorage.setItem('users', this.users);
-    SecureStorage.setItem('agents', this.agents);
     SecureStorage.setItem('transactions', this.transactions);
+    SecureStorage.setItem('admin_banks', this.adminBankAccounts);
     SecureStorage.setItem('system_logs', this.logs);
-    SecureStorage.setItem('support_tickets', this.supportTickets);
+    SecureStorage.setItem('agents', this.agents);
+    SecureStorage.setItem('markets', this.markets);
+    SecureStorage.setItem('support_tickets', this.tickets);
+    SecureStorage.setItem('chat_sessions', this.chatSessions);
+    SecureStorage.setItem('tasks', this.tasks);
+    SecureStorage.setItem('ads', this.ads);
   }
 
-  private addLog(event: string, user: string) {
-    this.logs.unshift({ id: `l_${Date.now()}`, event, user, timestamp: new Date().toISOString() });
-    this.save();
+  private notify(type: string, payload: any) {
+    const event: RealTimeEvent = { type, payload, timestamp: new Date().toISOString() };
+    this.listeners.forEach(l => l(event));
   }
 
-  // --- Profile Updates ---
-  updateUser(userId: string, updates: Partial<User>) {
-    if (this.users[userId]) {
-      this.users[userId] = { ...this.users[userId], ...updates };
-      if (this.currentUser?.id === userId) {
-        this.currentUser = this.users[userId];
-      }
-      this.addLog(`Profile Updated: ${Object.keys(updates).join(', ')}`, this.users[userId].name);
+  updateMarketRate(currencyPair: string, newPrice: number) {
+    const marketIndex = this.markets.findIndex(m => m.currency === currencyPair);
+    if (marketIndex !== -1) {
+      const market = this.markets[marketIndex];
+      market.change24h = ((newPrice - market.price) / market.price) * 100;
+      market.trend = newPrice > market.price ? 'UP' : 'DOWN';
+      market.price = newPrice;
+      market.lastUpdated = new Date().toISOString();
       this.save();
-      this.emit('USER_UPDATE', this.users[userId]);
-      return { success: true, user: this.users[userId] };
-    }
-    return { success: false, message: 'User not found' };
-  }
-
-  updateAgent(agentId: string, updates: Partial<Agent>) {
-    const idx = this.agents.findIndex(a => a.id === agentId);
-    if (idx !== -1) {
-      this.agents[idx] = { ...this.agents[idx], ...updates };
-      this.addLog(`Agent Profile Updated: ${this.agents[idx].businessName}`, 'SYSTEM');
-      this.save();
-      this.emit('AGENT_UPDATE', this.agents[idx]);
-      return { success: true, agent: this.agents[idx] };
-    }
-    return { success: false, message: 'Agent not found' };
-  }
-
-  // --- Financial Integrity (God Mode) ---
-  calculateSystemLiquidity() {
-    const rates: Record<string, number> = { NGN: 1, USD: 1550, EUR: 1680, BTC: 105000000 };
-    let totalLiquidityNGN = 0;
-    const breakdown: Record<string, { totalHoldings: number, valueInNGN: number }> = {};
-
-    Object.values(this.users).forEach(user => {
-      user.wallets.forEach(wallet => {
-        if (!breakdown[wallet.currency]) breakdown[wallet.currency] = { totalHoldings: 0, valueInNGN: 0 };
-        breakdown[wallet.currency].totalHoldings += wallet.balance;
-        const valNGN = wallet.balance * (rates[wallet.currency] || 1);
-        breakdown[wallet.currency].valueInNGN += valNGN;
-        totalLiquidityNGN += valNGN;
+      this.notify('MARKET_UPDATE', this.markets);
+      this.notify('SYSTEM_NOTIFICATION', { 
+        id: `m_${Date.now()}`, 
+        message: `Oracle Update: ${currencyPair} rate adjusted to ₦${newPrice}`, 
+        type: 'INFO' 
       });
-    });
-
-    return { totalLiquidityNGN, breakdown, lastUpdated: new Date().toISOString() };
-  }
-
-  calculateTotalNetWorth(userId: string): number {
-    const user = this.users[userId];
-    if (!user) return 0;
-    return user.wallets.reduce((acc, w) => acc + w.balance, 0);
-  }
-
-  // --- Auth & Node Identity ---
-  async autoLogin(): Promise<User | null> {
-    const session = SecureStorage.getItem('auth_session', null);
-    if (session && this.users[session.userId]) {
-      this.currentUser = this.users[session.userId];
-      return this.currentUser;
     }
-    return null;
-  }
-
-  login(email: string, pass: string) {
-    const user = Object.values(this.users).find(u => u.email === email && u.password === pass);
-    if (user) {
-      this.currentUser = user;
-      SecureStorage.setItem('auth_session', { userId: user.id });
-      this.addLog('Secure Entry Successful', user.name);
-      return { success: true, user };
-    }
-    return { success: false, message: 'Invalid Credentials' };
-  }
-
-  loginWithPin(email: string, pin: string) {
-    const user = Object.values(this.users).find(u => u.email === email && u.pin === pin);
-    if (user) {
-      this.currentUser = user;
-      SecureStorage.setItem('auth_session', { userId: user.id });
-      this.addLog('PIN-based Entry', user.name);
-      return { success: true, user };
-    }
-    return { success: false, message: 'Invalid PIN' };
   }
 
   register(data: any) {
-    const newUser: User = {
-      id: `u_${Date.now()}`,
-      ...data,
-      accountNumber: generateAccountNumber(),
-      balance: 0,
-      wallets: [{ id: `w_${Date.now()}`, currency: 'NGN', balance: 0, isDefault: true }],
+    let phoneDigits = data.phone ? data.phone.replace(/\D/g, '') : '';
+    let accNum = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : Math.floor(1000000000 + Math.random() * 9000000000).toString();
+
+    const user: User = { 
+      ...data, 
+      id: `u_${Date.now()}`, 
+      accountNumber: accNum,
+      balance: 0, 
+      password: hashValue(data.password), 
+      pin: data.pin ? hashValue(data.pin) : undefined,
+      wallets: [
+        { id: `w_${Date.now()}_ngn`, currency: 'NGN', balance: 0, isDefault: true },
+        { id: `w_${Date.now()}_usd`, currency: 'USD', balance: 0, isDefault: false },
+        { id: `w_${Date.now()}_eur`, currency: 'EUR', balance: 0, isDefault: false }
+      ],
+      status: UserStatus.PENDING_SETUP,
       kycLevel: 1,
-      status: UserStatus.ACTIVE,
-      verificationStatus: VerificationStatus.UNVERIFIED,
       createdAt: new Date().toISOString(),
-      referralCode: `PAYNA-${Math.floor(1000 + Math.random() * 9000)}`,
+      referralCode: `PN-${Math.floor(Math.random()*10000)}`,
+      totalSpent: 0,
+      totalEarned: 0,
+      rating: 5.0,
+      reviewCount: 0,
+      avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=3DF2C4&color=000`,
+      limits: { dailyLimit: 50000 }
+    };
+    this.users[data.email] = user;
+    this.currentUser = user;
+    SecureStorage.setItem('auth_session', { userId: user.email });
+    this.save();
+    return user;
+  }
+
+  createWorker(data: { name: string, email: string, role: UserRole }) {
+    if (this.users[data.email]) throw new Error("IDENTIFIER_ALREADY_DEPLOYED");
+
+    const user: User = {
+      id: `u_worker_${Date.now()}`,
+      username: data.email.split('@')[0],
+      name: data.name,
+      email: data.email,
+      password: hashValue('Payna2025!'), // Default staff password
+      pin: hashValue('1111'),           // Default staff pin
+      walletNumber: Math.floor(100000 + Math.random() * 899999).toString(),
+      accountNumber: Math.floor(1000000000 + Math.random() * 9000000000).toString(),
+      role: data.role,
+      status: UserStatus.PENDING_SETUP,
+      balance: 0,
+      wallets: [
+        { id: `w_s_${Date.now()}_ngn`, currency: 'NGN', balance: 0, isDefault: true }
+      ],
+      preferredCurrency: 'NGN',
+      kycLevel: 3,
+      createdAt: new Date().toISOString(),
+      avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=7C6CFF&color=fff`,
+      referralCode: `S-${Math.floor(Math.random()*9999)}`,
       totalSpent: 0,
       totalEarned: 0,
       rating: 5.0,
       reviewCount: 0
     };
-    this.users[newUser.id] = newUser;
-    this.addLog('New Node Registered', newUser.name);
+
+    this.users[data.email] = user;
     this.save();
-    return newUser;
+    this.notify('USER_UPDATE', user);
+    return user;
   }
 
-  logout() {
-    if (this.currentUser) this.addLog('Node Desynchronized', this.currentUser.name);
-    this.currentUser = null;
-    SecureStorage.setItem('auth_session', null);
+  deleteNode(email: string) {
+    if (this.users[email]) {
+      this.users[email].status = UserStatus.DEACTIVATED;
+      this.save();
+      this.notify('USER_UPDATE', this.users[email]);
+    }
   }
 
-  // --- Escrow & Transaction Engine ---
-  initiateEscrow(senderId: string, receiverId: string, amount: number, currency: string, service: AgentCategory) {
-    const sender = this.users[senderId];
-    if (!sender || sender.balance < amount) throw new Error("Insufficient Funds");
+  addAdminBank(bank: Omit<AdminBankAccount, 'id' | 'isActive'>) {
+    const newBank: AdminBankAccount = {
+      ...bank,
+      id: `bank_${Date.now()}`,
+      isActive: true
+    };
+    this.adminBankAccounts.push(newBank);
+    this.save();
+    this.notify('BANKS_UPDATE', this.adminBankAccounts);
+    return newBank;
+  }
 
-    sender.balance -= amount;
+  removeAdminBank(id: string) {
+    this.adminBankAccounts = this.adminBankAccounts.filter(b => b.id !== id);
+    this.save();
+    this.notify('BANKS_UPDATE', this.adminBankAccounts);
+  }
+
+  async login(email: string, pass: string) {
+    const user = this.users[email];
+    if (user && user.password === hashValue(pass) && user.status !== UserStatus.DEACTIVATED) {
+      this.currentUser = user;
+      SecureStorage.setItem('auth_session', { userId: user.email });
+      return { success: true, user };
+    }
+    return { success: false, message: 'Node Sync Error: Access Keys Invalid' };
+  }
+
+  async loginWithPin(userId: string, pin: string) {
+    const user = Object.values(this.users).find(u => u.id === userId);
+    if (user && user.pin === hashValue(pin) && user.status !== UserStatus.DEACTIVATED) {
+      this.currentUser = user;
+      SecureStorage.setItem('auth_session', { userId: user.email });
+      return { success: true, user };
+    }
+    return { success: false, message: 'Neural Pin Rejected' };
+  }
+
+  verifyPin(userId: string, pin: string): boolean {
+    const user = Object.values(this.users).find(u => u.id === userId);
+    return user?.pin === hashValue(pin) || false;
+  }
+
+  updateUser(userId: string, data: Partial<User>) {
+    const user = Object.values(this.users).find(u => u.id === userId);
+    if (user) {
+      if (data.pin) data.pin = hashValue(data.pin);
+      if (data.password) data.password = hashValue(data.password);
+      if (data.avatarUrl) {
+        const agentIndex = this.agents.findIndex(a => a.userId === userId);
+        if (agentIndex !== -1) {
+          this.agents[agentIndex].avatarUrl = data.avatarUrl;
+        }
+      }
+      Object.assign(user, data);
+      this.save();
+      this.notify('USER_UPDATE', user);
+    }
+  }
+
+  executeInternalTransfer(senderId: string, recipientAcc: string, amount: number, currency: string) {
+    const sender = Object.values(this.users).find(u => u.id === senderId);
+    const recipient = Object.values(this.users).find(u => u.accountNumber === recipientAcc);
+    if (!sender || !recipient) throw new Error("DESTINATION_NODE_NOT_FOUND");
+    const senderWallet = sender.wallets.find(w => w.currency === currency);
+    const recipientWallet = recipient.wallets.find(w => w.currency === currency);
+    if (!senderWallet || senderWallet.balance < amount) throw new Error("INSUFFICIENT_NODE_LIQUIDITY");
+    let targetWallet = recipientWallet;
+    if (!targetWallet) {
+      targetWallet = { id: `w_${Date.now()}_${currency.toLowerCase()}`, currency, balance: 0, isDefault: false };
+      recipient.wallets.push(targetWallet);
+    }
+    senderWallet.balance -= amount;
+    if (senderWallet.isDefault) sender.balance = senderWallet.balance;
+    targetWallet.balance += amount;
+    if (targetWallet.isDefault) recipient.balance = targetWallet.balance;
     const tx: Transaction = {
-      id: `esc_${Date.now()}`,
-      userId: senderId,
-      recipientId: receiverId,
-      recipientName: this.users[receiverId]?.name || 'Agent',
+      id: `tx_${Date.now()}`,
+      userId: sender.id,
+      type: TransactionType.TRANSFER,
       amount,
       currency,
-      status: TransactionStatus.IN_ESCROW,
-      type: TransactionType.ESCROW_PAYMENT,
-      isEscrow: true,
-      serviceType: service,
-      description: `${service} Service secured payment`,
       date: new Date().toISOString(),
-      referenceNumber: `ESC-${Math.random().toString(36).substring(7).toUpperCase()}`
+      status: TransactionStatus.COMPLETED,
+      description: `P2P Transfer to ${recipient.name}`,
+      recipientId: recipient.id,
+      recipientName: recipient.name,
+      recipientAccount: recipient.accountNumber
     };
-
     this.transactions.unshift(tx);
-    this.addLog(`Escrow Locked: ${amount} ${currency}`, sender.name);
     this.save();
-    this.emit('ESCROW_INIT', tx);
+    this.notify('TRANSACTION_NEW', tx);
     return tx;
   }
 
-  releaseEscrow(txId: string) {
-    const tx = this.transactions.find(t => t.id === txId);
-    if (!tx || tx.status !== TransactionStatus.IN_ESCROW) return;
-
-    const receiver = this.users[tx.recipientId!];
-    if (receiver) {
-      receiver.balance += tx.amount;
-      receiver.totalEarned += tx.amount;
-      const wallet = receiver.wallets.find(w => w.currency === tx.currency);
-      if (wallet) wallet.balance += tx.amount;
-    }
-
-    const sender = this.users[tx.userId];
-    if (sender) sender.totalSpent += tx.amount;
-
-    tx.status = TransactionStatus.RELEASED;
-    this.addLog(`Escrow Released: ${tx.id}`, 'SYSTEM_KERNEL');
+  addTask(taskData: Omit<Task, 'id' | 'createdAt'>) {
+    const task: Task = { ...taskData, id: `task_${Date.now()}`, createdAt: new Date().toISOString() };
+    this.tasks.push(task);
     this.save();
-    this.emit('ESCROW_RELEASE', tx);
+    this.notify('TASK_NEW', task);
+    return task;
   }
-
-  // --- Admin Operations ---
-  updateUserRole(adminId: string, targetId: string, role: UserRole) {
-    const admin = this.users[adminId];
-    if (admin?.role !== UserRole.SUPER_ADMIN) throw new Error("Unauthorized God-Mode action");
-    if (this.users[targetId]) {
-      this.users[targetId].role = role;
-      this.addLog(`Role Override: ${this.users[targetId].name} -> ${role}`, admin.name);
+  updateTask(taskId: string, updates: Partial<Task>) {
+    const idx = this.tasks.findIndex(t => t.id === taskId);
+    if (idx !== -1) {
+      this.tasks[idx] = { ...this.tasks[idx], ...updates };
       this.save();
-      this.emit('USER_UPDATE', this.users[targetId]);
+      this.notify('TASK_UPDATE', this.tasks[idx]);
     }
   }
-
-  manuallyAdjustBalance(adminId: string, targetId: string, amount: number) {
-    const admin = this.users[adminId];
-    if (admin?.role !== UserRole.SUPER_ADMIN) throw new Error("Unauthorized");
-    const user = this.users[targetId];
+  deleteTask(taskId: string) {
+    this.tasks = this.tasks.filter(t => t.id !== taskId);
+    this.save();
+    this.notify('TASK_DELETE', taskId);
+  }
+  releaseEscrow(id: string) {
+    const tx = this.transactions.find(t => t.id === id);
+    if (tx && tx.status === TransactionStatus.IN_ESCROW) {
+      tx.status = TransactionStatus.COMPLETED;
+      this.save();
+      this.notify('TRANSACTION_UPDATE', tx);
+    }
+  }
+  completeOnboarding(userId: string, data: any) {
+    const user = Object.values(this.users).find(u => u.id === userId);
     if (user) {
-      user.balance = amount;
-      const wallet = user.wallets.find(w => w.isDefault);
-      if (wallet) wallet.balance = amount;
-      this.addLog(`Balance Adjustment: ${user.name} set to ${amount}`, admin.name);
+      if (user.role === UserRole.AGENT) {
+        const newAgent: Agent = {
+          id: `a_${Date.now()}`,
+          userId: user.id,
+          businessName: data.businessName || user.name,
+          category: data.category || AgentCategory.POS,
+          avatarUrl: user.avatarUrl || '',
+          rating: 5.0,
+          isOnline: true,
+          basePrice: data.basePrice || 1000,
+          verificationStatus: VerificationStatus.PENDING,
+          location: { lat: 6.5244, lng: 3.3792 }
+        };
+        this.agents.push(newAgent);
+      }
+      Object.assign(user, { ...data, status: UserStatus.ACTIVE });
       this.save();
+      this.notify('USER_UPDATE', user);
     }
   }
-
-  getTickets(scope: 'USER' | 'ALL' = 'USER'): SupportTicket[] {
-    if (scope === 'ALL') return this.supportTickets;
-    return this.supportTickets.filter(t => t.userId === this.currentUser?.id);
+  getTickets(scope: 'ALL' | 'USER' = 'USER') {
+    if (scope === 'ALL') return this.tickets;
+    return this.tickets.filter(t => t.userId === this.currentUser?.id);
   }
-
   sendTicketMessage(ticketId: string, senderId: string, text: string, isAdmin: boolean) {
-    const ticket = this.supportTickets.find(t => t.id === ticketId);
+    const ticket = this.tickets.find(t => t.id === ticketId);
     if (ticket) {
-      ticket.messages.push({
-        id: `m_${Date.now()}`,
-        senderId,
-        text,
-        timestamp: new Date().toISOString(),
-        isAdmin
-      });
+      const msg: ChatMessage = { id: `msg_${Date.now()}`, text, timestamp: new Date().toISOString(), isAdmin, isSupport: isAdmin };
+      ticket.messages.push(msg);
       ticket.updatedAt = new Date().toISOString();
       this.save();
-      this.emit('TICKET_UPDATE', ticket);
+      this.notify('TICKET_UPDATE', ticket);
     }
   }
-
-  // --- Marketplace & Staff ---
-  getAgents(): Agent[] {
-    return this.agents;
+  getChatSession(userId: string) {
+    if (!this.chatSessions[userId]) this.chatSessions[userId] = { userId, messages: [] };
+    return this.chatSessions[userId];
   }
-
-  getStaffDirectory() {
-    return Object.values(this.users).filter(u => 
-      [UserRole.ADMIN, UserRole.SUPPORT, UserRole.SUPER_ADMIN].includes(u.role)
-    );
+  sendChatMessage(userId: string, text: string, isAdmin: boolean) {
+    const session = this.getChatSession(userId);
+    const msg: ChatMessage = { id: `msg_${Date.now()}`, text, timestamp: new Date().toISOString(), isAdmin, isSupport: isAdmin };
+    session.messages.push(msg);
+    this.save();
+    this.notify('CHAT_UPDATE', session);
   }
-
-  // --- Helpers ---
   getCurrentUser() { return this.currentUser; }
   getAllUsers() { return Object.values(this.users); }
-  getTransactions(scope: 'USER' | 'ALL' = 'USER') { 
+  getAgents() { return this.agents; }
+  getMarketData() { return this.markets; }
+  getAds() { return this.ads; }
+  getTransactions(scope: 'ALL' | 'USER' = 'USER') {
     if (scope === 'ALL') return this.transactions;
     return this.transactions.filter(t => t.userId === this.currentUser?.id || t.recipientId === this.currentUser?.id);
   }
-  getSystemLogs() { return this.logs; }
-  getMarketData(): MarketData[] { 
-    return [{ currency: 'BTC', price: 64230, change24h: 4.25, trend: 'UP', lastUpdated: new Date().toISOString() }];
+  getAdminBanks() { return this.adminBankAccounts; }
+  getTasks(userId: string) { return this.tasks.filter(t => t.userId === userId); }
+  getUserByAccountNumber(acc: string) { return Object.values(this.users).find(u => u.accountNumber === acc); }
+  calculateSystemLiquidity() { 
+    return { 
+      totalLiquidityNGN: Object.values(this.users).reduce((s, u) => s + (u.status !== UserStatus.DEACTIVATED ? u.balance : 0), 0),
+      totalNodes: Object.values(this.users).filter(u => u.status !== UserStatus.DEACTIVATED).length
+    }; 
   }
-  getAds() { return [{ id: 'ad1', text: 'Professional Agents earn 0.5% higher on P2P Escrow.', color: 'bg-[#10B981]' }]; }
-  isWalletNumberAvailable(num: string) { return !Object.values(this.users).some(u => u.walletNumber === num); }
-  getUserByAccountNumber(num: string) { return Object.values(this.users).find(u => u.accountNumber === num || u.walletNumber === num); }
-  requestTransaction(tx: any) { this.transactions.unshift(tx); this.save(); }
-  getExchangeRate(f: string, t: string) { return 1; }
-  isFaceIdEnrolled(e: string) { return true; }
-  getAuthenticationOptions(e: string) { return { challenge: 'MOCK_CHALLENGE' }; }
-  verifyAuthentication(e: string, c: any) { return { success: true }; }
-  completeOnboarding(uid: string, data: any) {
-    if (this.users[uid]) {
-      this.users[uid].status = UserStatus.ACTIVE;
-      this.save();
-    }
+  subscribe(callback: (event: RealTimeEvent) => void) {
+    this.listeners.add(callback);
+    return () => this.listeners.delete(callback);
   }
-
-  getChatSession(userId: string): ChatSession {
-    return {
-      messages: [
-        { id: 'm1', text: 'How can we help you?', timestamp: new Date().toISOString(), isSupport: true }
-      ]
-    };
-  }
-
-  sendChatMessage(userId: string, text: string, isSupport: boolean) {
-    console.log(`Support chat from ${userId}: ${text}`);
+  logout() { 
+    this.currentUser = null; 
+    SecureStorage.setItem('auth_session', null); 
+    window.location.reload(); 
   }
 }
 

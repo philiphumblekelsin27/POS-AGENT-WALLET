@@ -1,434 +1,181 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, UserRole, Agent, AgentCategory, VerificationStatus } from '../types';
+import { User, UserRole } from '../types';
 import { mockStore } from '../services/mockStore';
-import { 
-  User as UserIcon, Shield, CreditCard, Lock, Briefcase, 
-  ChevronRight, Camera, Bell, Eye, EyeOff, LogOut, 
-  Smartphone, MapPin, Clock, Star, CheckCircle, HelpCircle
-} from 'lucide-react';
+import { PinModal } from '../components/PinModal';
+import { Shield, CreditCard, Lock, ChevronRight, Camera, LogOut, Upload, Loader2, Sparkles } from 'lucide-react';
 
-interface ProfileProps {
-  user: User;
-  onRefresh?: () => void;
-}
-
-export const Profile: React.FC<ProfileProps> = ({ user, onRefresh }) => {
-  const [activeSection, setActiveSection] = useState<'OVERVIEW' | 'ACCOUNT' | 'SECURITY' | 'WALLET' | 'BUSINESS'>('OVERVIEW');
+export const Profile: React.FC<{ user: User, onRefresh?: () => void }> = ({ user, onRefresh }) => {
+  const [activeSection, setActiveSection] = useState<'OVERVIEW' | 'SECURITY' | 'PIN'>('OVERVIEW');
   const [isEditing, setIsEditing] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<Partial<User>>({
     name: user.name,
-    displayName: user.displayName || '',
     email: user.email,
-    phone: user.phone || '',
-    bio: user.bio || '',
-    preferredCurrency: user.preferredCurrency,
-    privacyMode: user.privacyMode || false
+    password: '',
+    pin: ''
   });
 
-  const agentData = user.role === UserRole.AGENT ? mockStore.getAgents().find(a => a.userId === user.id) : null;
-  const [agentForm, setAgentForm] = useState<Partial<Agent>>(agentData || {});
-
-  const handleUpdateUser = () => {
-    mockStore.updateUser(user.id, formData);
+  const handleUpdateUser = (pin?: string) => {
+    if (activeSection === 'PIN' && !pin) {
+      setIsPinModalOpen(true);
+      return;
+    }
+    
+    mockStore.updateUser(user.id, { ...formData, pin: pin });
     setIsEditing(false);
-    if (onRefresh) onRefresh();
+    setActiveSection('OVERVIEW');
+    onRefresh?.();
   };
 
-  const handleUpdateAgent = () => {
-    if (agentData) {
-      mockStore.updateAgent(agentData.id, agentForm);
-      setIsEditing(false);
-      if (onRefresh) onRefresh();
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploading(true);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        mockStore.updateUser(user.id, { avatarUrl: base64String });
+        setUploading(false);
+        onRefresh?.();
+        // Neural Ping
+        alert("Node Profile Synced.");
+      };
+      reader.onerror = () => {
+        setUploading(false);
+        alert("Buffer Transfer Failure.");
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const togglePrivacy = () => {
-    const newVal = !formData.privacyMode;
-    setFormData({ ...formData, privacyMode: newVal });
-    mockStore.updateUser(user.id, { privacyMode: newVal });
-  };
-
   const renderOverview = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="relative group flex justify-center">
-        <div className="relative">
-          <img 
-            src={user.avatarUrl} 
-            alt="Avatar" 
-            className="w-32 h-32 rounded-[2.5rem] object-cover border-4 border-white/5 shadow-2xl transition-transform group-hover:scale-105" 
-          />
-          <button className="absolute bottom-0 right-0 w-10 h-10 bg-[#10B981] text-black rounded-2xl flex items-center justify-center shadow-lg border-4 border-[#050505] active:scale-90 transition-all">
-            <Camera size={20} />
-          </button>
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-500">
+      <div className="flex flex-col items-center mt-12 relative">
+        <div className="absolute top-[-40px] opacity-10 blur-3xl pointer-events-none">
+          <Sparkles className="w-64 h-64 text-[#3DF2C4]" />
         </div>
-      </div>
-
-      <div className="text-center">
-        <h2 className="text-2xl font-black tracking-tighter uppercase">{user.name}</h2>
-        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mt-1">Node ID: {user.walletNumber}</p>
-      </div>
-
-      <div className="bg-[#0A0A0A] rounded-[2.5rem] border border-white/5 overflow-hidden">
-        <ProfileMenuItem 
-          icon={<UserIcon size={18} />} 
-          label="Identity Access" 
-          subLabel="Personal Info & Bio" 
-          onClick={() => setActiveSection('ACCOUNT')} 
-        />
-        <ProfileMenuItem 
-          icon={<Shield size={18} />} 
-          label="Security Vault" 
-          subLabel="FaceID & PIN Center" 
-          onClick={() => setActiveSection('SECURITY')} 
-        />
-        <ProfileMenuItem 
-          icon={<CreditCard size={18} />} 
-          label="Financial Oracle" 
-          subLabel="Currency & Limits" 
-          onClick={() => setActiveSection('WALLET')} 
-        />
-        {user.role === UserRole.AGENT && (
-          <ProfileMenuItem 
-            icon={<Briefcase size={18} />} 
-            label="Node Workstation" 
-            subLabel="Business Operating Settings" 
-            onClick={() => setActiveSection('BUSINESS')} 
+        
+        <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept="image/*" 
+            onChange={handleFileChange} 
           />
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <button 
-          onClick={() => mockStore.logout()}
-          className="w-full h-16 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl flex items-center justify-center gap-3 font-black uppercase text-[10px] tracking-widest hover:bg-red-500/20 active:scale-95 transition-all"
-        >
-          <LogOut size={18} /> Disconnect Node
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderAccount = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="flex justify-between items-center mb-4">
-        <button onClick={() => setActiveSection('OVERVIEW')} className="text-white/40 font-black text-[10px] uppercase tracking-widest">← Back</button>
-        <h3 className="text-xl font-black uppercase tracking-tighter">Identity Access</h3>
-        <button 
-          onClick={() => isEditing ? handleUpdateUser() : setIsEditing(true)}
-          className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border transition-all ${isEditing ? 'bg-[#10B981] text-black border-[#10B981]' : 'bg-white/5 border-white/10 text-white/60'}`}
-        >
-          {isEditing ? 'Save Sync' : 'Edit'}
-        </button>
-      </div>
-
-      <div className="space-y-6">
-        <SettingsField 
-          label="Legal Name" 
-          value={formData.name!} 
-          onChange={(v) => setFormData({ ...formData, name: v })} 
-          editable={isEditing} 
-        />
-        <SettingsField 
-          label="Display Username" 
-          value={formData.displayName!} 
-          onChange={(v) => setFormData({ ...formData, displayName: v })} 
-          editable={isEditing} 
-        />
-        <SettingsField 
-          label="Node Email" 
-          value={formData.email!} 
-          onChange={(v) => setFormData({ ...formData, email: v })} 
-          editable={isEditing} 
-        />
-        <SettingsField 
-          label="Contact Phone" 
-          value={formData.phone!} 
-          onChange={(v) => setFormData({ ...formData, phone: v })} 
-          editable={isEditing} 
-        />
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">Identity Bio</label>
-          {isEditing ? (
-            <textarea 
-              value={formData.bio} 
-              onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-              className="w-full bg-[#111] border border-white/10 p-5 rounded-2xl text-xs outline-none focus:border-[#10B981] transition-all min-h-[100px]"
+          <div className={`w-36 h-36 rounded-[3.5rem] overflow-hidden border-4 border-[#141821] shadow-2xl transition-all relative ${uploading ? 'opacity-50' : 'group-hover:scale-105'}`}>
+            <img 
+              src={user.avatarUrl} 
+              className="w-full h-full object-cover" 
+              alt="Node Avatar"
             />
-          ) : (
-            <div className="p-5 bg-white/5 border border-white/5 rounded-2xl text-xs text-white/60 leading-relaxed italic">
-              {formData.bio || "No bio established."}
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+               {uploading ? <Loader2 className="animate-spin text-white" /> : <Upload className="text-white" size={32} />}
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-[#10B981]/10 border border-[#10B981]/20 p-6 rounded-[2rem] flex items-center gap-4">
-        <CheckCircle className="text-[#10B981]" size={24} />
-        <div>
-          <p className="text-xs font-black uppercase tracking-tight text-white">KYC Verified Tier {user.kycLevel}</p>
-          <p className="text-[9px] text-[#10B981] font-bold uppercase tracking-widest">Full Node Access Active</p>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderSecurity = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="flex justify-between items-center mb-4">
-        <button onClick={() => setActiveSection('OVERVIEW')} className="text-white/40 font-black text-[10px] uppercase tracking-widest">← Back</button>
-        <h3 className="text-xl font-black uppercase tracking-tighter">Security Vault</h3>
-        <div className="w-8" />
-      </div>
-
-      <div className="space-y-4">
-        <SecurityActionItem 
-          icon={<Smartphone />} 
-          label="Biometric Enrollment" 
-          status="Active" 
-          onClick={() => {}} 
-        />
-        <SecurityActionItem 
-          icon={<Lock />} 
-          label="6-Digit Vault PIN" 
-          status="Secured" 
-          onClick={() => {}} 
-        />
-        <SecurityActionItem 
-          icon={<Shield />} 
-          label="Master Sync Key" 
-          status="••••••••" 
-          onClick={() => {}} 
-        />
-      </div>
-
-      <div className="p-8 bg-[#0A0A0A] rounded-[2.5rem] border border-white/5 space-y-4">
-        <h4 className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Active Synchronizations</h4>
-        <div className="flex justify-between items-center text-xs">
-          <div className="flex items-center gap-3">
-             <div className="w-2 h-2 bg-[#10B981] rounded-full" />
-             <p className="font-bold">iPhone 15 Pro (Current)</p>
           </div>
-          <span className="text-[8px] font-black text-white/20">Lagos, NG</span>
-        </div>
-        <button className="w-full pt-4 text-[9px] font-black text-red-500 uppercase tracking-widest text-center border-t border-white/5">Flush All Node Sessions</button>
-      </div>
-    </div>
-  );
-
-  const renderWallet = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="flex justify-between items-center mb-4">
-        <button onClick={() => setActiveSection('OVERVIEW')} className="text-white/40 font-black text-[10px] uppercase tracking-widest">← Back</button>
-        <h3 className="text-xl font-black uppercase tracking-tighter">Financial Oracle</h3>
-        <div className="w-8" />
-      </div>
-
-      <div className="space-y-6">
-        <div className="flex justify-between items-center p-6 bg-white/5 border border-white/5 rounded-2xl">
-          <div>
-            <p className="text-xs font-black uppercase text-white">Privacy Mode</p>
-            <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Hide balance on entry</p>
+          <div className="absolute bottom-1 right-1 w-12 h-12 bg-[#3DF2C4] text-black rounded-2xl flex items-center justify-center border-4 border-[#0B0E11] shadow-xl group-hover:rotate-12 transition-transform">
+            <Camera size={22} />
           </div>
-          <button 
-            onClick={togglePrivacy}
-            className={`w-14 h-8 rounded-full transition-all relative p-1 ${formData.privacyMode ? 'bg-[#10B981]' : 'bg-white/10'}`}
-          >
-            <motion.div 
-              animate={{ x: formData.privacyMode ? 24 : 0 }}
-              className="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center text-black"
-            >
-              {formData.privacyMode ? <EyeOff size={12} /> : <Eye size={12} />}
-            </motion.div>
-          </button>
         </div>
-
-        <div className="space-y-2">
-           <label className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">Preferred Currency</label>
-           <div className="grid grid-cols-3 gap-3">
-              {['NGN', 'USD', 'BTC'].map(curr => (
-                <button 
-                  key={curr}
-                  onClick={() => setFormData({ ...formData, preferredCurrency: curr })}
-                  className={`p-4 rounded-xl border text-xs font-black uppercase transition-all ${formData.preferredCurrency === curr ? 'bg-[#10B981] text-black border-[#10B981]' : 'bg-white/5 border-white/10 text-white/40'}`}
-                >
-                  {curr}
-                </button>
-              ))}
+        
+        <div className="text-center mt-8">
+           <h2 className="text-3xl font-black tracking-tighter uppercase text-white">{user.name}</h2>
+           <div className="flex items-center justify-center gap-3 mt-1">
+              <p className="text-[10px] font-black text-[#A3ACB9] uppercase tracking-[0.4em]">{user.role} NODE</p>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#3DF2C4] shadow-[0_0_10px_#3DF2C4]" />
+              <p className="text-[10px] font-black text-[#3DF2C4] uppercase tracking-[0.3em]">{user.walletNumber}</p>
            </div>
-        </div>
-
-        <div className="p-8 bg-gradient-to-br from-[#1E293B] to-[#0A0A0A] rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6">
-           <div className="flex justify-between items-center">
-              <h4 className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Operational Limits</h4>
-              <span className="text-[8px] font-black text-[#10B981] bg-[#10B981]/10 px-2 py-1 rounded">TIER {user.kycLevel}</span>
-           </div>
-           <div className="space-y-4">
-              <div className="flex justify-between text-xs font-black uppercase tracking-tight">
-                 <span className="text-white/40">Daily Sync Limit</span>
-                 <span>₦{user.limits?.dailyLimit.toLocaleString()}</span>
-              </div>
-              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                 <div className="w-1/3 h-full bg-[#10B981]" />
-              </div>
-              <p className="text-[9px] text-white/20 font-bold text-center">33% of daily synchronization limit used.</p>
-           </div>
-           <button className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">Request Limit Elevation</button>
         </div>
       </div>
-    </div>
-  );
 
-  const renderBusiness = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="flex justify-between items-center mb-4">
-        <button onClick={() => setActiveSection('OVERVIEW')} className="text-white/40 font-black text-[10px] uppercase tracking-widest">← Back</button>
-        <h3 className="text-xl font-black uppercase tracking-tighter">Node Workstation</h3>
-        <button 
-          onClick={() => isEditing ? handleUpdateAgent() : setIsEditing(true)}
-          className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border transition-all ${isEditing ? 'bg-[#10B981] text-black border-[#10B981]' : 'bg-white/5 border-white/10 text-white/60'}`}
-        >
-          {isEditing ? 'Seal Settings' : 'Modify'}
+      <div className="bg-[#141821] rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
+        <ProfileMenuItem icon={<Lock size={20} />} label="Security Protocol" subLabel="Manage Hardware Keys" onClick={() => setActiveSection('SECURITY')} />
+        <ProfileMenuItem icon={<Shield size={20} />} label="Action PIN" subLabel="Transaction Verification" onClick={() => setActiveSection('PIN')} />
+        <ProfileMenuItem icon={<CreditCard size={20} />} label="Vault Nodes" subLabel="Multi-Currency Balances" onClick={() => {}} />
+      </div>
+
+      <div className="px-2">
+        <button onClick={() => mockStore.logout()} className="w-full h-20 bg-red-500/5 text-red-500 border border-red-500/10 rounded-[2rem] flex items-center justify-center gap-4 font-black uppercase text-[10px] tracking-[0.4em] transition-all hover:bg-red-500/10 active:scale-95">
+          <LogOut size={20} /> Terminate Connection
         </button>
       </div>
-
-      {agentData ? (
-        <div className="space-y-6">
-          <div className="flex items-center gap-6 p-6 bg-white/5 border border-white/5 rounded-[2rem]">
-             <img src={agentData.avatarUrl} className="w-16 h-16 rounded-2xl object-cover" />
-             <div>
-                <p className="text-xs font-black uppercase tracking-tight text-white">{agentData.businessName}</p>
-                <div className="flex items-center gap-1.5 text-yellow-400 text-[10px] font-black mt-1">
-                   <Star size={12} fill="currentColor" /> {agentData.rating}
-                </div>
-             </div>
-          </div>
-
-          <div className="flex justify-between items-center p-6 bg-white/5 border border-white/5 rounded-2xl">
-            <div>
-              <p className="text-xs font-black uppercase text-white">Discovery Status</p>
-              <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Visible to nearby nodes</p>
-            </div>
-            <button 
-              onClick={() => setAgentForm({ ...agentForm, isOnline: !agentForm.isOnline })}
-              className={`w-14 h-8 rounded-full transition-all relative p-1 ${agentForm.isOnline ? 'bg-[#10B981]' : 'bg-white/10'}`}
-            >
-              <motion.div 
-                animate={{ x: agentForm.isOnline ? 24 : 0 }}
-                className="w-6 h-6 bg-white rounded-full shadow-lg"
-              />
-            </button>
-          </div>
-
-          <SettingsField 
-            label="Business Terminal Name" 
-            value={agentForm.businessName!} 
-            onChange={(v) => setAgentForm({ ...agentForm, businessName: v })} 
-            editable={isEditing} 
-          />
-          <SettingsField 
-            label="Operating Pulse (Hours)" 
-            value={agentForm.operatingHours!} 
-            onChange={(v) => setAgentForm({ ...agentForm, operatingHours: v })} 
-            editable={isEditing} 
-          />
-          <SettingsField 
-            label="Base Synchronization Rate (₦)" 
-            value={agentForm.basePrice!.toString()} 
-            onChange={(v) => setAgentForm({ ...agentForm, basePrice: parseInt(v) || 0 })} 
-            editable={isEditing} 
-          />
-          <SettingsField 
-            label="Operational Radius (KM)" 
-            value={agentForm.travelRadius!.toString()} 
-            onChange={(v) => setAgentForm({ ...agentForm, travelRadius: parseInt(v) || 0 })} 
-            editable={isEditing} 
-          />
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">Terminal Description</label>
-            {isEditing ? (
-              <textarea 
-                value={agentForm.description} 
-                onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })}
-                className="w-full bg-[#111] border border-white/10 p-5 rounded-2xl text-xs outline-none focus:border-[#10B981] transition-all min-h-[100px]"
-              />
-            ) : (
-              <div className="p-5 bg-white/5 border border-white/5 rounded-2xl text-xs text-white/60 leading-relaxed italic">
-                {agentForm.description || "No business description provided."}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="p-12 bg-white/5 rounded-[2.5rem] border border-dashed border-white/10 text-center space-y-4">
-           <HelpCircle size={48} className="mx-auto text-white/10" />
-           <p className="text-xs font-black uppercase text-white/40">No Agent Node Detected</p>
-           <button className="text-[10px] font-black text-[#10B981] uppercase tracking-widest underline">Initialize Professional Node</button>
-        </div>
-      )}
     </div>
   );
 
   return (
-    <div className="p-6 pb-32 max-w-md mx-auto min-h-screen">
+    <div className="p-8 pb-32 max-w-md mx-auto min-h-screen bg-[#0B0E11] text-[#E6EAF0]">
+      <PinModal isOpen={isPinModalOpen} onClose={() => setIsPinModalOpen(false)} onConfirm={handleUpdateUser} title="NODE ROTATION VERIFY" />
+      
       <AnimatePresence mode="wait">
-        {activeSection === 'OVERVIEW' && renderOverview()}
-        {activeSection === 'ACCOUNT' && renderAccount()}
-        {activeSection === 'SECURITY' && renderSecurity()}
-        {activeSection === 'WALLET' && renderWallet()}
-        {activeSection === 'BUSINESS' && renderBusiness()}
+        {activeSection === 'OVERVIEW' ? renderOverview() : (
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-12 mt-10">
+            <header className="flex justify-between items-center">
+              <button onClick={() => {setActiveSection('OVERVIEW'); setIsEditing(false);}} className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-[#A3ACB9] hover:text-white transition-colors">
+                 ←
+              </button>
+              <h3 className="text-xl font-black uppercase tracking-tighter text-white">
+                {activeSection === 'SECURITY' ? 'Kernel Key' : 'Action PIN'}
+              </h3>
+              <button 
+                onClick={() => isEditing ? handleUpdateUser() : setIsEditing(true)} 
+                className={`text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-2xl transition-all ${isEditing ? 'bg-[#3DF2C4] text-black shadow-lg shadow-[#3DF2C4]/20' : 'bg-white/5 text-[#A3ACB9]'}`}
+              >
+                {isEditing ? 'Sync' : 'Modify'}
+              </button>
+            </header>
+
+            <div className="space-y-8">
+              {activeSection === 'SECURITY' ? (
+                <div className="p-10 bg-[#141821] rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
+                   <div className="space-y-3">
+                     <p className="text-[10px] font-black text-[#3DF2C4] uppercase tracking-[0.4em] ml-2">Hardware Password</p>
+                     <input disabled={!isEditing} type="password" placeholder="••••••••" className="w-full bg-[#0B0E11] p-6 rounded-[1.5rem] border border-white/5 outline-none focus:border-[#3DF2C4] text-xl tracking-widest disabled:opacity-50 transition-all" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                   </div>
+                   <div className="p-6 bg-[#3DF2C4]/5 rounded-2xl border border-[#3DF2C4]/10">
+                      <p className="text-[9px] font-black text-white/40 uppercase tracking-widest leading-relaxed">Secure your node with a complex cryptographic key. Never share this with unauthorized terminals.</p>
+                   </div>
+                </div>
+              ) : (
+                <div className="p-12 bg-[#141821] rounded-[3rem] border border-white/5 space-y-10 shadow-2xl text-center">
+                   <div className="space-y-6">
+                     <p className="text-[10px] font-black text-[#3DF2C4] uppercase tracking-[0.5em]">Induction PIN</p>
+                     <input 
+                       disabled={!isEditing} 
+                       type="password" 
+                       maxLength={4} 
+                       className="w-full bg-[#0B0E11] p-8 rounded-[2rem] border border-white/5 outline-none focus:border-[#3DF2C4] text-center text-5xl tracking-[0.6em] font-black text-[#3DF2C4] disabled:opacity-30 transition-all" 
+                       value={formData.pin} 
+                       onChange={e => setFormData({...formData, pin: e.target.value.replace(/\D/g, '')})} 
+                     />
+                   </div>
+                   <p className="text-[9px] font-black text-white/20 uppercase tracking-widest">4-Digit numeric verification key</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
 };
 
 const ProfileMenuItem = ({ icon, label, subLabel, onClick }: { icon: any, label: string, subLabel: string, onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className="w-full p-6 flex items-center justify-between group hover:bg-white/[0.02] transition-all border-b border-white/5 last:border-b-0"
-  >
-    <div className="flex items-center gap-5">
-      <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white/30 group-hover:text-[#10B981] group-hover:bg-[#10B981]/10 transition-all">
-        {icon}
-      </div>
+  <button onClick={onClick} className="w-full p-8 flex items-center justify-between border-b border-white/5 last:border-b-0 hover:bg-white/[0.03] transition-colors group">
+    <div className="flex items-center gap-6">
+      <div className="w-14 h-14 rounded-2xl bg-[#0B0E11] border border-white/5 flex items-center justify-center text-[#A3ACB9] group-hover:text-[#3DF2C4] group-hover:border-[#3DF2C4]/20 transition-all">{icon}</div>
       <div className="text-left">
-        <p className="text-sm font-black uppercase tracking-tight text-white group-hover:text-[#10B981] transition-colors">{label}</p>
-        <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest mt-0.5">{subLabel}</p>
+        <p className="text-sm font-black uppercase tracking-tight text-[#E6EAF0] group-hover:text-white transition-colors">{label}</p>
+        <p className="text-[9px] text-[#A3ACB9] font-bold uppercase tracking-[0.2em] mt-1">{subLabel}</p>
       </div>
     </div>
-    <ChevronRight size={18} className="text-white/10 group-hover:text-[#10B981] transition-all group-hover:translate-x-1" />
+    <ChevronRight size={20} className="text-white/10 group-hover:translate-x-1 group-hover:text-[#3DF2C4] transition-all" />
   </button>
-);
-
-const SecurityActionItem = ({ icon, label, status, onClick }: { icon: any, label: string, status: string, onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className="w-full p-6 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group hover:bg-[#10B981]/5 hover:border-[#10B981]/20 transition-all"
-  >
-    <div className="flex items-center gap-4">
-      <div className="text-white/20 group-hover:text-[#10B981] transition-colors">{icon}</div>
-      <p className="text-xs font-black uppercase tracking-tight text-white/60 group-hover:text-white transition-colors">{label}</p>
-    </div>
-    <span className="text-[10px] font-black text-[#10B981] uppercase tracking-widest">{status}</span>
-  </button>
-);
-
-const SettingsField = ({ label, value, onChange, editable }: { label: string, value: string, onChange: (v: string) => void, editable: boolean }) => (
-  <div className="space-y-2">
-    <label className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">{label}</label>
-    {editable ? (
-      <input 
-        type="text" 
-        value={value} 
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-[#111] border border-white/10 p-5 rounded-2xl text-xs outline-none focus:border-[#10B981] transition-all font-medium text-white" 
-      />
-    ) : (
-      <div className="w-full bg-white/[0.03] border border-white/5 p-5 rounded-2xl text-xs font-bold text-white/60">
-        {value}
-      </div>
-    )}
-  </div>
 );

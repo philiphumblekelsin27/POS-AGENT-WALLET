@@ -16,12 +16,15 @@ export const SupportDashboard: React.FC = () => {
   const ticketUser = mockStore.getAllUsers().find(u => u.id === activeTicket?.userId);
 
   useEffect(() => {
+    // FIX: Ensure the cleanup function returns void to satisfy React's EffectCallback type.
     const unsub = mockStore.subscribe((ev) => {
       if (ev.type === 'TICKET_NEW' || ev.type === 'TICKET_UPDATE') {
         setTickets(mockStore.getTickets('ALL'));
       }
     });
-    return unsub;
+    return () => {
+      unsub();
+    };
   }, []);
 
   useEffect(() => {

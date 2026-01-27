@@ -10,12 +10,16 @@ import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { Wallet } from './pages/Wallet';
 import { Agents } from './pages/Agents';
+import { Tasks } from './pages/Tasks';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Markets } from './pages/Markets';
 import { SupportDashboard } from './pages/SupportDashboard';
 import { Profile } from './pages/Profile';
+import { OnboardingUser } from './pages/OnboardingUser';
+import { OnboardingAgent } from './pages/OnboardingAgent';
+import { OnboardingStaff } from './pages/OnboardingStaff';
 import { mockStore } from './services/mockStore';
-import { UserRole, Transaction, User, Notification } from './types';
+import { UserRole, User, Notification, UserStatus } from './types';
 import { ShieldCheck, Cpu } from 'lucide-react';
 
 function App() {
@@ -27,62 +31,71 @@ function App() {
   const [notification, setNotification] = useState<Notification | null>(null);
 
   useEffect(() => {
-    // Artificial initialization to simulate kernel loading and crypto-handshake
+    // Neural Initialization Sequence
     const timer = setTimeout(() => {
       setIsInitializing(false);
-    }, 2800);
-    return () => clearTimeout(timer);
+      const user = mockStore.getCurrentUser();
+      if (user) {
+        setCurrentUser({...user});
+        setIsLoggedIn(true);
+        setViewState('APP');
+        handleRoleRouting(user);
+      }
+    }, 2400);
+
+    // Subscribe to Real-time Kernel Stream
+    const unsub = mockStore.subscribe((ev) => {
+       if (ev.type === 'TRANSACTION_NEW') {
+          setNotification({ 
+            id: `notif_${Date.now()}`, 
+            message: 'Inbound Sync: Node Transaction Completed.', 
+            type: 'LIVE', 
+            timestamp: new Date().toISOString() 
+          });
+       }
+       if (ev.type === 'SYSTEM_NOTIFICATION') {
+          setNotification(ev.payload);
+       }
+       if (ev.type === 'USER_UPDATE') {
+          const freshUser = mockStore.getCurrentUser();
+          if (freshUser && freshUser.id === ev.payload.id) {
+             setCurrentUser({...ev.payload});
+          }
+       }
+    });
+
+    return () => { clearTimeout(timer); unsub(); };
   }, []);
+
+  const handleRoleRouting = (user: User) => {
+    if ([UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(user.role)) setActiveTab('admin');
+    else if (user.role === UserRole.SUPPORT) setActiveTab('support');
+    else setActiveTab('dashboard');
+  };
 
   const handleLoginSuccess = () => {
     const user = mockStore.getCurrentUser();
     if (user) {
-      setCurrentUser(user);
+      setCurrentUser({...user});
       setIsLoggedIn(true);
       setViewState('APP');
-      
-      // Automatic Role Routing
-      if ([UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(user.role)) {
-        setActiveTab('admin');
-      } else if (user.role === UserRole.SUPPORT) {
-        setActiveTab('support');
-      } else {
-        setActiveTab('dashboard');
-      }
+      handleRoleRouting(user);
     }
   };
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-12 text-center">
-        <motion.div 
-          initial={{ scale: 0.5, opacity: 0 }} 
-          animate={{ scale: 1, opacity: 1 }} 
-          transition={{ duration: 0.8 }} 
-          className="relative mb-12"
-        >
-            <div className="w-24 h-24 rounded-[2.5rem] bg-gradient-to-tr from-[#10B981] to-[#5D5FEF] text-black flex items-center justify-center text-5xl shadow-[0_0_80px_rgba(16,185,129,0.3)]">
-              <ShieldCheck strokeWidth={2.5} size={50} />
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-12 text-center overflow-hidden">
+        <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative mb-14">
+            <div className="w-28 h-28 rounded-[3.5rem] bg-[#3DF2C4] text-black flex items-center justify-center text-6xl shadow-[0_0_50px_rgba(61,242,196,0.2)]">
+              <ShieldCheck size={56} strokeWidth={2.5} />
             </div>
-            <motion.div 
-              animate={{ rotate: 360 }} 
-              transition={{ duration: 10, repeat: Infinity, ease: "linear" }} 
-              className="absolute -inset-6 border border-[#10B981]/20 rounded-[3rem]" 
-            />
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 12, repeat: Infinity, ease: "linear" }} className="absolute -inset-10 border border-[#3DF2C4]/10 rounded-[5rem]" />
+            <motion.div animate={{ rotate: -360 }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }} className="absolute -inset-16 border border-[#3DF2C4]/5 rounded-[6rem]" />
         </motion.div>
-        <h1 className="text-white font-black tracking-tighter text-4xl mb-2">PAYNA</h1>
-        <div className="flex flex-col items-center gap-6">
-          <div className="flex items-center gap-3 text-[#10B981] text-[10px] font-black uppercase tracking-[0.5em]">
-            <Cpu size={14} /> Synchronizing Neural Node
-          </div>
-          <div className="w-64 h-1 bg-white/5 rounded-full overflow-hidden relative">
-            <motion.div 
-              initial={{ left: '-100%' }} 
-              animate={{ left: '100%' }} 
-              transition={{ duration: 2, repeat: Infinity }} 
-              className="absolute top-0 bottom-0 w-1/2 bg-[#10B981]" 
-            />
-          </div>
+        <h1 className="text-white font-black tracking-tighter text-6xl mb-4 italic">PAYNA</h1>
+        <div className="flex items-center gap-4 text-[#3DF2C4] text-[11px] font-black uppercase tracking-[0.8em] opacity-60">
+          <Cpu size={16} className="animate-pulse" /> Neural Core Boot
         </div>
       </div>
     );
@@ -90,54 +103,45 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
+      <NotificationToast notification={notification} onClose={() => setNotification(null)} />
+      
       {!isLoggedIn || !currentUser ? (
-        <motion.div key="auth" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-h-screen relative">
+        <motion.div key="auth" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-h-screen">
           {viewState === 'REGISTER' ? (
-            <Register 
-              onRegisterSuccess={handleLoginSuccess} 
-              onNavigateToLogin={() => setViewState('LOGIN')} 
-            />
+            <Register onRegisterSuccess={handleLoginSuccess} onNavigateToLogin={() => setViewState('LOGIN')} />
           ) : (
-            <Login 
-              onLoginSuccess={handleLoginSuccess} 
-              onNavigateToRegister={() => setViewState('REGISTER')} 
-            />
+            <Login onLoginSuccess={handleLoginSuccess} onNavigateToRegister={() => setViewState('REGISTER')} />
           )}
         </motion.div>
       ) : (
         <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen bg-[#050505]">
-          {currentUser.role === UserRole.SUPPORT ? (
-            <SupportDashboard />
-          ) : [UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(currentUser.role) ? (
-            <AdminDashboard />
+          {currentUser.status === UserStatus.PENDING_SETUP ? (
+            [UserRole.SUPPORT, UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(currentUser.role) ? (
+              <OnboardingStaff userId={currentUser.id} onComplete={() => setCurrentUser({...mockStore.getCurrentUser()!})} />
+            ) : currentUser.role === UserRole.AGENT ? (
+              <OnboardingAgent userId={currentUser.id} onComplete={() => setCurrentUser({...mockStore.getCurrentUser()!})} />
+            ) : (
+              <OnboardingUser userId={currentUser.id} onComplete={() => setCurrentUser({...mockStore.getCurrentUser()!})} />
+            )
           ) : (
-            <Layout activeTab={activeTab} onTabChange={setActiveTab} role={currentUser.role}>
-              {activeTab === 'dashboard' && (
-                <Dashboard 
-                  user={currentUser} 
-                  transactions={mockStore.getTransactions('USER')} 
-                  onNavigate={setActiveTab} 
-                />
+            <>
+              {currentUser.role === UserRole.SUPPORT ? (
+                <SupportDashboard />
+              ) : [UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(currentUser.role) ? (
+                <AdminDashboard />
+              ) : (
+                <Layout activeTab={activeTab} onTabChange={setActiveTab} role={currentUser.role}>
+                  {activeTab === 'dashboard' && <Dashboard user={currentUser} transactions={mockStore.getTransactions('USER')} onNavigate={setActiveTab} />}
+                  {activeTab === 'wallet' && <Wallet user={currentUser} onRefresh={() => setCurrentUser({...mockStore.getCurrentUser()!})} />}
+                  {activeTab === 'tasks' && <Tasks user={currentUser} />}
+                  {activeTab === 'agents' && <Agents agents={mockStore.getAgents()} />}
+                  {activeTab === 'profile' && <Profile user={currentUser} onRefresh={() => setCurrentUser({...mockStore.getCurrentUser()!})} />}
+                </Layout>
               )}
-              {activeTab === 'wallet' && (
-                <Wallet 
-                  user={currentUser} 
-                  onAddTransaction={(tx) => mockStore.requestTransaction(tx)} 
-                />
-              )}
-              {activeTab === 'agents' && <Agents agents={mockStore.getAgents()} />}
-              {activeTab === 'markets' && <Markets />}
-              {activeTab === 'profile' && (
-                <Profile 
-                  user={currentUser} 
-                  onRefresh={() => setCurrentUser(mockStore.getCurrentUser())}
-                />
-              )}
-            </Layout>
+            </>
           )}
           <AiChatbot />
           <AdBanner />
-          <NotificationToast notification={notification} onClose={() => setNotification(null)} />
         </motion.div>
       )}
     </AnimatePresence>

@@ -1,230 +1,150 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Transaction, TransactionType, TransactionStatus, MultiCurrencyWallet, WalletStatus, WealthInsight } from '../types';
+import { User, Transaction, TransactionType, TransactionStatus, AdminBankAccount } from '../types';
 import { mockStore } from '../services/mockStore';
-import { analyzeReceipt, AnalysisResult } from '../services/aiService';
-import { Modal } from '../components/Modal';
-import { SlideToConfirm } from '../components/SlideToConfirm';
-// Fixed: Added Wallet as WalletIcon to the lucide-react imports
-import { ArrowUpRight, ArrowDownLeft, Repeat, Camera, History, PieChart, Shield, Info, ChevronDown, Wallet as WalletIcon } from 'lucide-react';
+import { PinModal } from '../components/PinModal';
+import { ArrowUpRight, ArrowDownLeft, Shield, Info, ChevronDown, Wallet as WalletIcon, Copy, CheckCircle, User as UserIcon, Loader2, XCircle, DollarSign } from 'lucide-react';
 
-interface WalletProps {
-  user: User;
-  onAddTransaction: (tx: Transaction) => void;
-  initialTab?: 'topup' | 'withdraw' | 'transfer' | 'swap';
-  onRefresh?: () => void;
-}
-
-export const Wallet: React.FC<WalletProps> = ({ user, onAddTransaction, initialTab, onRefresh }) => {
-  const [activeTab, setActiveTab] = useState<'topup' | 'withdraw' | 'transfer' | 'swap'>(initialTab || 'topup');
-  const [activeWallet, setActiveWallet] = useState<MultiCurrencyWallet>(user.wallets.find(w => w.currency === user.preferredCurrency) || user.wallets[0]);
-  const [targetCurrency, setTargetCurrency] = useState<string>('NGN');
+export const Wallet: React.FC<{ user: User, onRefresh?: () => void }> = ({ user, onRefresh }) => {
+  const [activeTab, setActiveTab] = useState<'topup' | 'transfer'>('transfer');
   const [amount, setAmount] = useState('');
-  const [recipientAccount, setRecipientAccount] = useState('');
+  const [currency, setCurrency] = useState('NGN');
+  const [recipientAcc, setRecipientAcc] = useState('');
   const [recipientName, setRecipientName] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [refNumber, setRefNumber] = useState('');
+  const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Transaction[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<AnalysisResult | null>(null);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const wealthInsights: WealthInsight[] = [
-    { category: 'Transport', percentage: 12, trend: 'UP', message: "You spent 12% more on Transport this month than last month." },
-    { category: 'Savings', percentage: 5, trend: 'DOWN', message: "Your currency swaps saved you ₦4,200 in fees this week." }
-  ];
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  
+  const adminBanks = mockStore.getAdminBanks();
 
   useEffect(() => {
     setHistory(mockStore.getTransactions('USER'));
-  }, [user.wallets]);
+  }, []);
 
   useEffect(() => {
-    if (recipientAccount.length >= 10) {
-      const foundUser = mockStore.getUserByAccountNumber(recipientAccount);
-      setRecipientName(foundUser ? foundUser.name : null);
-    } else {
-      setRecipientName(null);
-    }
-  }, [recipientAccount]);
-
-  const handleConfirmAction = () => {
-    const newTx: Transaction = {
-      id: `tx_${Date.now()}`,
-      userId: user.id,
-      type: activeTab === 'topup' ? TransactionType.DEPOSIT : activeTab === 'withdraw' ? TransactionType.WITHDRAWAL : TransactionType.TRANSFER,
-      amount: parseFloat(amount),
-      currency: activeWallet.currency,
-      toCurrency: activeTab === 'transfer' ? targetCurrency : undefined,
-      date: new Date().toISOString(),
-      status: TransactionStatus.COMPLETED,
-      description: activeTab === 'topup' ? `Wallet Top Up (${activeWallet.currency})` : activeTab === 'withdraw' ? 'Bank Payout' : `Node Transfer to ${recipientName || recipientAccount}`,
-      recipientId: recipientAccount,
-      referenceNumber: scanResult?.referenceNumber || `REF-${Date.now()}`
+    const lookupRecipient = async () => {
+      const cleanAcc = recipientAcc.replace(/\D/g, '');
+      if (cleanAcc.length === 10) {
+        setIsVerifying(true);
+        await new Promise(r => setTimeout(r, 600));
+        const foundUser = mockStore.getUserByAccountNumber(cleanAcc);
+        setRecipientName(foundUser ? foundUser.name : 'ACCOUNT_NOT_FOUND');
+        setIsVerifying(false);
+      } else {
+        setRecipientName(null);
+      }
     };
+    lookupRecipient();
+  }, [recipientAcc]);
 
-    onAddTransaction(newTx);
-    setAmount('');
-    setRecipientAccount('');
-    setRecipientName(null);
-    setShowConfirm(false);
-    if (onRefresh) onRefresh();
+  const handleTransferClick = () => {
+    if (recipientName === 'ACCOUNT_NOT_FOUND' || !recipientName) return;
+    setIsPinModalOpen(true);
   };
 
-  const exchangeRate = mockStore.getExchangeRate(activeWallet.currency, targetCurrency);
-  const totalToPay = parseFloat(amount) || 0;
+  const handlePinConfirm = (pin: string) => {
+    setIsPinModalOpen(false);
+    if (!mockStore.verifyPin(user.id, pin)) {
+      alert("Neural Pin Rejected: Access Denied");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      mockStore.executeInternalTransfer(user.id, recipientAcc, parseFloat(amount), currency);
+      setAmount('');
+      setRecipientAcc('');
+      setRecipientName(null);
+      alert(`${currency} Transfer Successful.`);
+      onRefresh?.();
+      setHistory(mockStore.getTransactions('USER'));
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="p-6 pb-32 text-white bg-[#050505] min-h-screen overflow-x-hidden">
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-3xl font-black tracking-tight">Vault</h2>
-        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#00F2EA]">
-          <Shield size={20} />
+    <div className="p-8 pb-32 bg-[#0B0E11] min-h-screen text-[#E6EAF0] font-inter">
+      <PinModal isOpen={isPinModalOpen} onClose={() => setIsPinModalOpen(false)} onConfirm={handlePinConfirm} title="CONFIRM TRANSFER" />
+      
+      <header className="flex justify-between items-center mb-10">
+        <div>
+          <h2 className="text-3xl font-black tracking-tighter uppercase">Vault</h2>
+          <p className="text-[10px] font-black text-[#A3ACB9] uppercase tracking-widest mt-1">ID: {user.accountNumber}</p>
         </div>
-      </div>
+        <div className="w-12 h-12 bg-[#3DF2C4]/10 rounded-2xl flex items-center justify-center text-[#3DF2C4]">
+          <Shield size={24} />
+        </div>
+      </header>
 
-      {/* Phase 9 Wealth Insights */}
-      <section className="mb-10 p-5 rounded-[2rem] bg-gradient-to-br from-indigo-900/40 to-emerald-900/40 border border-white/10 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-5">
-          <PieChart size={80} />
-        </div>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-1.5 h-1.5 bg-[#00F2EA] rounded-full animate-ping" />
-          <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#00F2EA]">Wealth Intelligence</h3>
-        </div>
-        <p className="text-xs font-medium leading-relaxed opacity-80">{wealthInsights[0].message}</p>
-      </section>
-
-      {/* Wallet Operations Grid */}
-      <section className="grid grid-cols-2 gap-4 mb-10">
-        {[
-          { id: 'topup', icon: <ArrowDownLeft />, label: 'Add Cash', color: 'bg-emerald-500/10 text-emerald-400' },
-          { id: 'withdraw', icon: <ArrowUpRight />, label: 'Payout', color: 'bg-indigo-500/10 text-indigo-400' },
-          { id: 'transfer', icon: <Repeat />, label: 'Send Node', color: 'bg-purple-500/10 text-purple-400' },
-          { id: 'swap', icon: <PieChart />, label: 'Swap', color: 'bg-orange-500/10 text-orange-400' },
-        ].map(op => (
-          <button 
-            key={op.id}
-            onClick={() => setActiveTab(op.id as any)}
-            className={`p-5 rounded-3xl border transition-all flex flex-col gap-3 ${
-              activeTab === op.id ? 'bg-white/10 border-[#00F2EA] shadow-[0_0_20px_rgba(0,242,234,0.1)]' : 'bg-white/5 border-white/5'
-            }`}
-          >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${op.color}`}>{op.icon}</div>
-            <span className="text-[10px] font-black uppercase tracking-widest">{op.label}</span>
-          </button>
+      {/* Multi-Currency Balance Display */}
+      <div className="flex gap-4 overflow-x-auto no-scrollbar mb-10 pb-4">
+        {user.wallets.map(w => (
+          <div key={w.id} className="min-w-[280px] bg-[#141821] p-8 rounded-[3rem] border border-white/5 relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-6 opacity-5"><DollarSign size={60} /></div>
+             <p className="text-[#A3ACB9] text-[9px] font-black uppercase tracking-widest mb-2">{w.currency} Balance</p>
+             <h2 className="text-4xl font-black tracking-tighter">{w.currency === 'NGN' ? '₦' : w.currency === 'USD' ? '$' : w.currency} {w.balance.toLocaleString()}</h2>
+          </div>
         ))}
-      </section>
-
-      <div className="space-y-6">
-        <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5">
-          <div className="flex justify-between items-center mb-6">
-            <label className="text-[10px] font-black uppercase tracking-widest text-white/30">Transfer Amount</label>
-            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 border border-white/10">
-              <span className="text-[10px] font-bold text-white/50">{activeWallet.currency}</span>
-              <ChevronDown size={12} className="text-white/30" />
-            </div>
-          </div>
-          <input 
-            type="number" 
-            value={amount} 
-            onChange={e => setAmount(e.target.value)} 
-            className="w-full bg-transparent text-5xl font-black text-center outline-none focus:text-[#00F2EA] transition-all placeholder:text-white/5" 
-            placeholder="0.00" 
-          />
-        </div>
-
-        {activeTab === 'transfer' && (
-          <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
-             <label className="text-[10px] font-black uppercase tracking-widest text-white/30">Recipient Node ID</label>
-             <input 
-               type="text" 
-               value={recipientAccount} 
-               onChange={e => setRecipientAccount(e.target.value)}
-               placeholder="XXXX-XX-XXXX"
-               className="w-full bg-transparent text-xl font-mono tracking-tighter outline-none"
-             />
-             {recipientName && (
-               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-3">
-                 <Shield className="text-emerald-400" size={16} />
-                 <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Verified Target: {recipientName}</p>
-               </motion.div>
-             )}
-          </div>
-        )}
-
-        <button 
-          onClick={() => setShowConfirm(true)}
-          disabled={!amount || (activeTab === 'transfer' && !recipientName)}
-          className="w-full py-5 bg-[#00F2EA] text-black rounded-[2rem] font-black uppercase tracking-widest shadow-2xl shadow-[#00F2EA]/20 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale"
-        >
-          Review Operation
-        </button>
       </div>
 
-      {/* Transaction History Categorized (Phase 9) */}
-      <section className="mt-12 space-y-6">
-        <div className="flex justify-between items-center px-1">
-          <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Synchronization Feed</h3>
-          <History size={16} className="text-white/20" />
-        </div>
-        <div className="space-y-8">
-          {['Today', 'Yesterday'].map(day => (
-            <div key={day} className="space-y-4">
-              <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/20 ml-2">{day}</p>
-              {history.slice(0, 3).map(tx => (
-                <div key={tx.id} className="p-5 rounded-[2rem] bg-white/[0.02] border border-white/5 flex justify-between items-center group hover:bg-white/[0.04] transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 text-white/30 group-hover:text-[#00F2EA] transition-colors">
-                      <WalletIcon size={20} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-tight">{tx.description}</p>
-                      <p className="text-[9px] text-white/20 font-bold mt-1 uppercase tracking-widest">{tx.status} • {tx.currency}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-black ${tx.type === TransactionType.DEPOSIT ? 'text-[#00F2EA]' : 'text-white'}`}>
-                      {tx.type === TransactionType.DEPOSIT ? '+' : '-'} {tx.amount.toLocaleString()}
-                    </p>
-                  </div>
+      <div className="flex gap-4 mb-8">
+        <button onClick={() => setActiveTab('transfer')} className={`flex-1 p-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'transfer' ? 'bg-[#3DF2C4] text-black shadow-lg' : 'bg-white/5 text-white/30'}`}>Send</button>
+        <button onClick={() => setActiveTab('topup')} className={`flex-1 p-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'topup' ? 'bg-[#3DF2C4] text-black shadow-lg' : 'bg-white/5 text-white/30'}`}>Top Up</button>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'transfer' ? (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key="p2p" className="space-y-6">
+            <div className="bg-[#141821] p-8 rounded-[2.5rem] border border-white/5 space-y-6">
+              <div className="flex gap-2 mb-4">
+                {['NGN', 'USD', 'GBP'].map(curr => (
+                  <button key={curr} onClick={() => setCurrency(curr)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${currency === curr ? 'bg-[#3DF2C4] text-black' : 'bg-white/5 text-white/20'}`}>{curr}</button>
+                ))}
+              </div>
+              
+              <div className="relative">
+                <input className="w-full bg-transparent border-b border-white/10 p-4 text-2xl font-black tracking-tight outline-none focus:border-[#3DF2C4]" placeholder="10 Digits" maxLength={10} value={recipientAcc} onChange={e => setRecipientAcc(e.target.value)} />
+                <div className="min-h-[24px] mt-2">
+                  {recipientName && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`text-[9px] font-black uppercase tracking-widest ${recipientName === 'ACCOUNT_NOT_FOUND' ? 'text-red-500' : 'text-[#3DF2C4]'}`}>
+                      {recipientName === 'ACCOUNT_NOT_FOUND' ? 'Node Not Found' : `Identity: ${recipientName}`}
+                    </motion.p>
+                  )}
                 </div>
-              ))}
+              </div>
+              
+              <input type="number" className="w-full bg-transparent border-b border-white/10 p-4 text-4xl font-black tracking-tighter outline-none focus:border-[#3DF2C4]" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
+              
+              <button onClick={handleTransferClick} disabled={loading || !amount || !recipientAcc || recipientName === 'ACCOUNT_NOT_FOUND' || !recipientName} className="w-full bg-[#3DF2C4] text-black h-16 rounded-2xl font-black uppercase tracking-widest shadow-xl disabled:opacity-20 active:scale-95 transition-all">
+                Execute {currency} Transfer
+              </button>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Phase 7 Secure Confirmation */}
-      <Modal isOpen={showConfirm} onClose={() => setShowConfirm(false)} title="Confirm Operation">
-        <div className="space-y-8 bg-[#0F172A] p-6 -m-4">
-          <div className="text-center space-y-2">
-            <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">Total Transaction</p>
-            <h2 className="text-4xl font-black text-[#00F2EA]">{activeWallet.currency} {totalToPay.toLocaleString()}</h2>
-            {activeWallet.currency !== 'NGN' && (
-              <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">~ ₦{(totalToPay * mockStore.getExchangeRate(activeWallet.currency, 'NGN')).toLocaleString()}</p>
-            )}
-          </div>
-
-          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-3">
-             <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-white/40">
-               <span>Platform Fee</span>
-               <span>0.00 %</span>
-             </div>
-             <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-[#00F2EA]">
-               <span>Vault Shield</span>
-               <span>Active</span>
-             </div>
-          </div>
-
-          <div className="bg-indigo-500/10 p-4 rounded-2xl border border-indigo-500/20 flex gap-3 items-start">
-             <Info className="text-indigo-400 shrink-0" size={14} />
-             <p className="text-[9px] font-medium text-indigo-200/60 leading-relaxed uppercase tracking-widest">Funds will be synchronized across nodes immediately. Ensure recipient ID is correct.</p>
-          </div>
-
-          <SlideToConfirm onConfirm={handleConfirmAction} label="Slide to Synchronize" successLabel="Syncing Nodes..." />
-          <button onClick={() => setShowConfirm(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-white/30 py-2">Abort Operation</button>
-        </div>
-      </Modal>
+          </motion.div>
+        ) : (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key="fund" className="space-y-6">
+            <div className="bg-[#141821] p-8 rounded-[2.5rem] border border-white/5 space-y-6">
+              <div className="space-y-4 max-h-64 overflow-y-auto no-scrollbar">
+                {adminBanks.map(bank => (
+                  <div key={bank.id} className="p-6 bg-white/[0.02] rounded-2xl border border-white/5 space-y-2">
+                    <p className="text-[8px] font-black text-white/30 uppercase tracking-widest">{bank.bankName}</p>
+                    <p className="text-sm font-black text-white uppercase">{bank.accountName}</p>
+                    <p className="text-2xl font-black text-[#3DF2C4] tracking-widest">{bank.accountNumber}</p>
+                  </div>
+                ))}
+              </div>
+              <input type="number" className="w-full bg-white/5 p-5 rounded-2xl border border-white/5 outline-none focus:border-[#3DF2C4]" placeholder="Deposit Amount (₦)" value={amount} onChange={e => setAmount(e.target.value)} />
+              <input className="w-full bg-white/5 p-5 rounded-2xl border border-white/5 outline-none focus:border-[#3DF2C4]" placeholder="Session Reference" value={refNumber} onChange={e => setRefNumber(e.target.value)} />
+              <button onClick={() => alert("Verification Logged.")} className="w-full bg-[#3DF2C4] text-black h-16 rounded-2xl font-black uppercase tracking-widest shadow-xl">Submit Evidence</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -70,10 +70,13 @@ export const AiChatbot: React.FC = () => {
       
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: [
+        // FIX: Contents must be an object with a parts array
+        contents: {
+          parts: [
             { text: context },
             { text: `User Question: ${currentInput}` }
-        ],
+          ]
+        },
         config: {
           systemInstruction: `
             You are the "Payna AI Core", a high-level financial assistant integrated into the PAYNA POS & Multi-Currency Wallet.

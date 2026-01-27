@@ -11,10 +11,13 @@ export const Markets: React.FC = () => {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    // FIX: Ensure the cleanup function returns void to satisfy React's EffectCallback type.
     const unsubscribe = mockStore.subscribe((event: RealTimeEvent) => {
         if (event.type === 'MARKET_UPDATE') setMarkets(event.payload);
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const filtered = markets.filter(m => m.currency.toLowerCase().includes(search.toLowerCase()));

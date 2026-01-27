@@ -1,6 +1,6 @@
 {
   "name": "PAYNA",
-  "description": "A PWA for POS agent discovery, wallet services, and peer-to-peer transactions with AI-assisted verification.",
+  "description": "Hardened multi-currency terminal and wallet for professional agents with real-time oracle rates.",
   "requestFramePermissions": [
     "camera",
     "microphone",
