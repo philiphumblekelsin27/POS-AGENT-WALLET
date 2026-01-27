@@ -49,7 +49,6 @@ export const AdminDashboard: React.FC = () => {
       mockStore.createWorker(newWorker);
       setIsWorkerModalOpen(false);
       setNewWorker({ name: '', email: '', role: UserRole.SUPPORT });
-      alert("Worker Node Successfully Deployed.");
     } catch (err: any) {
       alert(err.message);
     }
@@ -63,7 +62,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleDeleteBank = (id: string) => {
-    if (confirm("Terminate this Liquidity Pool?")) {
+    if (confirm("Terminate this Liquidity Pool node?")) {
       mockStore.removeAdminBank(id);
     }
   };
@@ -130,24 +129,6 @@ export const AdminDashboard: React.FC = () => {
                        <div className="text-center"><p className="text-4xl font-black text-orange-500">{users.filter(u => u.status === UserStatus.PENDING_APPROVAL).length}</p><p className="text-[9px] font-black uppercase text-white/20 tracking-widest mt-1">Audit</p></div>
                     </div>
                   </div>
-               </div>
-
-               <div className="bg-[#1C2230] p-10 rounded-[3.5rem] border border-white/5">
-                 <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-8">Network Vital Stream</h3>
-                 <div className="space-y-4">
-                   {users.filter(u => u.status !== UserStatus.DEACTIVATED).slice(-5).map(u => (
-                     <div key={u.id} className="flex justify-between items-center py-4 border-b border-white/5 last:border-0">
-                        <div className="flex items-center gap-4">
-                           <img src={u.avatarUrl} className="w-12 h-12 rounded-2xl object-cover border border-white/10" />
-                           <div>
-                              <p className="text-sm font-black text-white">{u.name}</p>
-                              <p className="text-[8px] font-bold text-white/20 uppercase">Joined {new Date(u.createdAt).toLocaleDateString()}</p>
-                           </div>
-                        </div>
-                        <span className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest ${u.status === UserStatus.ACTIVE ? 'bg-[#3DF2C4]/10 text-[#3DF2C4]' : 'bg-white/5 text-white/30'}`}>{u.status}</span>
-                     </div>
-                   ))}
-                 </div>
                </div>
             </motion.div>
           )}
@@ -254,12 +235,9 @@ export const AdminDashboard: React.FC = () => {
                             <p className="text-3xl font-black text-[#3DF2C4] tracking-widest mt-1">{bank.accountNumber}</p>
                          </div>
                       </div>
-                      <div className="flex items-center gap-6">
-                        <div className="px-6 py-2 rounded-full border border-[#3DF2C4]/20 text-[#3DF2C4] text-[10px] font-black uppercase">Active Operational Node</div>
-                        <button onClick={() => handleDeleteBank(bank.id)} className="w-12 h-12 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                           <Trash size={18} />
-                        </button>
-                      </div>
+                      <button onClick={() => handleDeleteBank(bank.id)} className="w-12 h-12 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                         <Trash size={18} />
+                      </button>
                    </div>
                  ))}
                </div>
@@ -284,11 +262,7 @@ export const AdminDashboard: React.FC = () => {
                <select className="w-full bg-black/20 p-5 rounded-2xl border border-white/10 outline-none font-black uppercase text-xs" value={newWorker.role} onChange={e => setNewWorker({...newWorker, role: e.target.value as any})}>
                   <option value={UserRole.SUPPORT}>Support Agent</option>
                   <option value={UserRole.ADMIN}>Admin Node</option>
-                  <option value={UserRole.AGENT}>Field Agent</option>
                </select>
-            </div>
-            <div className="p-4 bg-[#3DF2C4]/5 border border-[#3DF2C4]/20 rounded-2xl">
-               <p className="text-[9px] font-black text-[#3DF2C4] uppercase tracking-widest leading-relaxed">System Note: Initial password will be 'Payna2025!' and PIN '1111'. Node must reset keys upon first induction.</p>
             </div>
             <button onClick={handleCreateWorker} className="w-full bg-[#3DF2C4] text-black p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">
                Deploy Node
@@ -301,23 +275,15 @@ export const AdminDashboard: React.FC = () => {
          <div className="space-y-6 text-white p-2">
             <div className="space-y-2">
                <label className="text-[10px] font-black uppercase text-white/30 ml-2">Bank Name</label>
-               <input className="w-full bg-black/20 p-5 rounded-2xl border border-white/10 outline-none focus:border-[#3DF2C4]" placeholder="e.g. Access Bank" value={newBank.bankName} onChange={e => setNewBank({...newBank, bankName: e.target.value})} />
+               <input className="w-full bg-black/20 p-5 rounded-2xl border border-white/10 outline-none focus:border-[#3DF2C4]" placeholder="e.g. Zenith Bank" value={newBank.bankName} onChange={e => setNewBank({...newBank, bankName: e.target.value})} />
             </div>
             <div className="space-y-2">
                <label className="text-[10px] font-black uppercase text-white/30 ml-2">Account Name</label>
-               <input className="w-full bg-black/20 p-5 rounded-2xl border border-white/10 outline-none focus:border-[#3DF2C4]" placeholder="e.g. PAYNA POOL ALPHA" value={newBank.accountName} onChange={e => setNewBank({...newBank, accountName: e.target.value})} />
+               <input className="w-full bg-black/20 p-5 rounded-2xl border border-white/10 outline-none focus:border-[#3DF2C4]" placeholder="Account Holder" value={newBank.accountName} onChange={e => setNewBank({...newBank, accountName: e.target.value})} />
             </div>
             <div className="space-y-2">
                <label className="text-[10px] font-black uppercase text-white/30 ml-2">Account Number</label>
                <input className="w-full bg-black/20 p-5 rounded-2xl border border-white/10 outline-none focus:border-[#3DF2C4]" placeholder="10 Digits" value={newBank.accountNumber} onChange={e => setNewBank({...newBank, accountNumber: e.target.value})} />
-            </div>
-            <div className="space-y-2">
-               <label className="text-[10px] font-black uppercase text-white/30 ml-2">Primary Pool Currency</label>
-               <select className="w-full bg-black/20 p-5 rounded-2xl border border-white/10 outline-none font-black uppercase text-xs" value={newBank.currency} onChange={e => setNewBank({...newBank, currency: e.target.value})}>
-                  <option value="NGN">Nigerian Naira (NGN)</option>
-                  <option value="USD">US Dollar (USD)</option>
-                  <option value="GBP">British Pound (GBP)</option>
-               </select>
             </div>
             <button onClick={handleAddBank} className="w-full bg-[#3DF2C4] text-black p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">
                Activate Pool Node

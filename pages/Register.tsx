@@ -44,7 +44,7 @@ export const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigat
   const handleBack = () => setStep(s => s - 1);
 
   const handleFinalize = async () => {
-    if (formData.password !== formData.confirmPassword) return alert("Passwords do not match");
+    if (formData.password !== formData.confirmPassword) return;
     if (formData.pin.length !== 4) return alert("Action PIN must be 4 digits");
     
     setLoading(true);
@@ -163,14 +163,22 @@ export const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigat
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-white/30 uppercase tracking-widest ml-1">Confirm Protocol Key</label>
-                  <input type="password" className={`w-full bg-white/5 border p-5 rounded-2xl outline-none transition-all ${passwordMismatch ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-[#3DF2C4]'}`} placeholder="Re-enter Password" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
-                  {passwordMismatch && (
-                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-1.5 px-2 text-red-500">
-                      <XCircle size={10} />
-                      <span className="text-[8px] font-black uppercase">Keys do not match</span>
-                    </motion.div>
-                  )}
+                  <label className="text-[9px] font-black text-white/30 uppercase tracking-widest ml-1">Confirm Password</label>
+                  <div className="relative">
+                    <input 
+                      type="password" 
+                      className={`w-full bg-white/5 border p-5 rounded-2xl outline-none transition-all ${passwordMismatch ? 'border-red-500' : 'border-white/10 focus:border-[#3DF2C4]'}`} 
+                      placeholder="Re-enter Key" 
+                      value={formData.confirmPassword} 
+                      onChange={e => setFormData({...formData, confirmPassword: e.target.value})} 
+                    />
+                    {passwordMismatch && (
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500">
+                        <XCircle size={18} />
+                      </div>
+                    )}
+                  </div>
+                  {passwordMismatch && <p className="text-[8px] font-black uppercase text-red-500 ml-1">Error: Credentials do not match</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -187,14 +195,14 @@ export const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigat
                     value={formData.pin} 
                     onChange={e => setFormData({...formData, pin: e.target.value.replace(/\D/g, '')})} 
                   />
-                  <p className="text-[8px] text-center text-white/20 font-black uppercase mt-1 tracking-widest">PIN input is masked for visual security</p>
+                  <p className="text-[8px] text-center text-white/20 font-black uppercase mt-1 tracking-widest italic">Node entry masked for visual security</p>
                 </div>
               </div>
 
               <button 
                 onClick={handleFinalize} 
                 disabled={loading || !formData.password || !formData.pin || passwordMismatch || formData.password.length < 8}
-                className="w-full bg-[#3DF2C4] text-black p-5 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-50"
+                className="w-full bg-[#3DF2C4] text-black p-5 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-20 transition-all"
               >
                 {loading ? <Loader2 className="animate-spin" /> : <>Initialize Node <ChevronRight size={18} /></>}
               </button>
